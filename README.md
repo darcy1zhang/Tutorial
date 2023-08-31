@@ -23,42 +23,42 @@
 |  D0  |  ✔  |
 |  D4  |  ✔  |
 |  DOG  |    |
-|  Ekg  |    |
-|  HOWAREYOU  |    |
-|  HeartRate  |    |
+|  Ekg  |   ✔  |
+|  HOWAREYOU  |   ✔  |
+|  HeartRate  |  ✔  |
 |  PcaRidgeSampling  |    |
 |  RidgeSampling  |    |
 |  SVD  |    |
 |  WV  |    |
-|  W_tilda.1  |    |
-|  W_tilda.2  |    |
-|  W_tilda.3  |    |
-|  W_tilda.4  |    |
-|  W_tilda.5  |    |
-|  W_tilda.6  |    |
-|  W_tilda.7  |    |
-|  W_tilda.8  |    |
-|  W_tilda.9  |    |
-|  YN  |    |
-|  YNdiff  |    |
+|  W_tilda.1  |  ✔  |
+|  W_tilda.2  |  ✔  |
+|  W_tilda.3  |  ✔  |
+|  W_tilda.4  |  ✔  |
+|  W_tilda.5  |  ✔  |
+|  W_tilda.6  |  ✔  |
+|  W_tilda.7  |  ✔  |
+|  W_tilda.8  |  ✔  |
+|  W_tilda.9  |  ✔  |
+|  YN  |  ✔  |
+|  YNdiff  |  ✔  |
 |  adjust.length  |    |
-|  amber7  |    |
-|  amber8  |    |
-|  amber9  |    |
-|  back1.000  |    |
-|  back1.180  |    |
-|  back1.220  |    |
-|  backscatter.1.000  |    |
-|  backscatter.1.180  |    |
-|  backscatter.1.220  |    |
+|  amber7  |  ✔  |
+|  amber8  |  ✔  |
+|  amber9  |  ✔  |
+|  back1.000  |  ✔  |
+|  back1.180  |  ✔  |
+|  back1.220  |  ✔  |
+|  backscatter.1.000  |  ✔  |
+|  backscatter.1.180  |  ✔  |
+|  backscatter.1.220  |  ✔  |
 |  cfamily  |    |
 |  cgt  |    |
-|  ch  |    |
+|  ch  |  ✔  |
 |  check.maxresoln  |    |
-|  chirpm5db.dat   |    |
+|  chirpm5db.dat   |  ✔  |
 |  cleanph     |    |
-|  click  |    |
-|  click.asc  |    |
+|  click  |  ✔  |
+|  click.asc  |  ✔  |
 |  corona  |    |
 |  coronoid  |    |
 |  crc  |    |
@@ -92,36 +92,36 @@
 |  morwave2  |    |
 |  mrecons  |    |
 |  mw  |    |
-|  noisy.dat  |    |
-|  noisywave  |    |
+|  noisy.dat  |  ✔  |
+|  noisywave  |  ✔  |
 |  npl  |    |
-|  pixel_8.7  |    |
-|  pixel_8.8  |    |
-|  pixel_8.9  |    |
+|  pixel_8.7  |  ✔  |
+|  pixel_8.8  |  ✔  |
+|  pixel_8.9  |  ✔  |
 |  plotResult   |    |
 |  plotwt   |    |
-|  pure.dat    |    |
-|  purwave   |    |
+|  pure.dat    |  ✔  |
+|  purwave   |  ✔  |
 |  regrec  |    |
 |  regrec2  |    |
 |  ridrec  |    |
 |  rkernel  |    |
 |  rwkernel  |    |
 |  scrcrec  |    |
-|  sig_W_tilda.1  |    |
-|  sig_W_tilda.2  |    |
-|  sig_W_tilda.3  |    |
-|  sig_W_tilda.4  |    |
-|  sig_W_tilda.5  |    |
-|  signal_W_tilda.1  |    |
-|  signal_W_tilda.2  |    |
-|  signal_W_tilda.3  |    |
-|  signal_W_tilda.4  |    |
-|  signal_W_tilda.5  |    |
-|  signal_W_tilda.6  |    |
-|  signal_W_tilda.7  |    |
-|  signal_W_tilda.8  |    |
-|  signal_W_tilda.9  |    |
+|  sig_W_tilda.1  |  ✔  |
+|  sig_W_tilda.2  |  ✔  |
+|  sig_W_tilda.3  |  ✔  |
+|  sig_W_tilda.4  |  ✔  |
+|  sig_W_tilda.5  |  ✔  |
+|  signal_W_tilda.1  |  ✔  |
+|  signal_W_tilda.2  |  ✔  |
+|  signal_W_tilda.3  |  ✔  |
+|  signal_W_tilda.4  |  ✔  |
+|  signal_W_tilda.5  |  ✔  |
+|  signal_W_tilda.6  |  ✔  |
+|  signal_W_tilda.7  |  ✔  |
+|  signal_W_tilda.8  |  ✔  |
+|  signal_W_tilda.9  |  ✔  |
 |  skeleton  |    |
 |  skeleton2  |    |
 |  smoothts  |    |
@@ -143,8 +143,8 @@
 |  wRidgeSampling  |    |
 |  wpl  |    |
 |  wspec.pl  |    |
-|  yen  |    |
-|  yendiff  |    |
+|  yen  |  ✔  |
+|  yendiff  |  ✔  |
 |  zerokernel  |    |
 |  zeroskeleton  |    |
 |  zeroskeleton2  |    |

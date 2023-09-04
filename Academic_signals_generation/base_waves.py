@@ -8,7 +8,7 @@ from numpy import asarray, zeros, place, nan, mod, pi, extract, log, sqrt, \
 
 #%% function script
 def generate_sine_waves(length_seconds, sampling_rate, frequencies, func="sin", add_noise=0, plot=False):
-    r"""
+    """
     Generate a n-D array, `length_seconds` seconds signal at `sampling_rate` sampling rate.
     Cited from https://towardsdatascience.com/hands-on-signal-processing-with-python-9bda8aad39de
 

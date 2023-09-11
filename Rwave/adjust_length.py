@@ -1,28 +1,31 @@
-def adjust_length(inputdata):
+import numpy as np
+
+def adjust_length(signal):
     """
     Description:
         Adjust the length of input data to the nearest power of 2 by zero-padding.
 
     Params:
-        inputdata (numpy.ndarray or list): Input data to be adjusted.
+        signal (numpy.ndarray or list): Input data to be adjusted.
 
     Returns:
-        adjusted_data (numpy.ndarray): Data with adjusted length.
-        new_length (int): The new length of the data after adjustment.
+        new_signal (numpy.ndarray): Signal with adjusted length.
+        new_len (int): The new length of the data after adjustment.
     """
-    s = inputdata
-    np = len(s)
+    old_signal = np.array(signal)  # Convert inputdata to a NumPy array if it's not already.
+    old_len = len(old_signal)
     pow_of_2 = 1
-    while 2 * pow_of_2 < np:
+    while 2 * pow_of_2 < old_len:
         pow_of_2 *= 2
-    new_np = 2 * pow_of_2
+    new_len = 2 * pow_of_2
 
-    if np == new_np:
-        return s, np
+    if old_len == new_len:
+        return old_signal, old_len
     else:
-        new_s = [0] * new_np
-        new_s[:np] = s
-        return new_s, new_np
+        new_signal = np.zeros(new_len)  # Create a new NumPy array filled with zeros.
+        new_signal[:old_len] = old_signal
+        return new_signal, new_len
+
 
 if __name__ == "__main__":
     import os

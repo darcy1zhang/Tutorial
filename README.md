@@ -24,14 +24,14 @@
 |  C4  |  ✔  |
 |  D0  |  ✔  |
 |  D4  |  ✔  |
-|  DOG  |    |
+|  DOG  |  ✔  |
 |  Ekg  |   ✔  |
 |  HOWAREYOU  |   ✔  |
 |  HeartRate  |  ✔  |
 |  PcaRidgeSampling  |    |
 |  RidgeSampling  |    |
 |  SVD  |  ✔  |
-|  WV  |    |
+|  WV  |  ✔  |
 |  W_tilda.1  |  ✔  |
 |  W_tilda.2  |  ✔  |
 |  W_tilda.3  |  ✔  |
@@ -54,7 +54,7 @@
 |  backscatter.1.180  |  ✔  |
 |  backscatter.1.220  |  ✔  |
 |  cfamily  |    |
-|  cgt  |    |
+|  cgt  |  ✔  |
 |  ch  |  ✔  |
 |  check.maxresoln  |  ✔  |
 |  chirpm5db.dat   |  ✔  |
@@ -63,18 +63,18 @@
 |  click.asc  |  ✔  |
 |  corona  |    |
 |  coronoid  |    |
-|  crc  |    |
+|  crc  |  ✔  |
 |  crcrec  |    |
 |  crfview  |    |
 |  cwt  |  ✔  |
-|  cwtTh  |    |
+|  cwtTh  |  ✔  |
 |  cwtimage  |  ✔  |
-|  cwtp  |    |
+|  cwtp  |  ✔  |
 |  cwtpolar  |  ✔  |
-|  cwtsquiz  |    |
+|  cwtsquiz  |  ✔  |
 |  dwinverse  |    |
-|  epl  |    |
-|  ext  |    |
+|  epl  |  ✔  |
+|  ext  |  ✔  |
 |  fastgkernel  |    |
 |  fastkernel  |    |
 |  gabor  |  ✔  |
@@ -85,7 +85,7 @@
 |  gsampleOne  |  ✔  |
 |  gwave  |    |
 |  gwave2  |    |
-|  hurst.est  |    |
+|  hurst.est  |  ✔  |
 |  icm  |    |
 |  mbtrim  |    |
 |  mntrim  |    |
@@ -93,15 +93,15 @@
 |  morwave  |    |
 |  morwave2  |    |
 |  mrecons  |    |
-|  mw  |    |
+|  mw  |  ✔  |
 |  noisy.dat  |  ✔  |
 |  noisywave  |  ✔  |
 |  npl  |  ✔  |
 |  pixel_8.7  |  ✔  |
 |  pixel_8.8  |  ✔  |
 |  pixel_8.9  |  ✔  |
-|  plotResult   |    |
-|  plotwt   |    |
+|  plotResult   |  ✔  |
+|  plotwt   |  ✔  |
 |  pure.dat    |  ✔  |
 |  purwave   |  ✔  |
 |  regrec  |    |
@@ -137,14 +137,14 @@
 |  tfmean  |  ✔  |
 |  tfpct  |  ✔  |
 |  tfvar  |  ✔  |
-|  vDOG  |    |
+|  vDOG  |  ✔  |
 |  vecgabor  |    |
 |  vecmorlet  |    |
-|  vgt  |    |
-|  vwt  |    |
+|  vgt  |  ✔  |
+|  vwt  |  ✔  |
 |  wRidgeSampling  |    |
-|  wpl  |    |
-|  wspec.pl  |    |
+|  wpl  |  ✔  |
+|  wspec.pl  |  ✔  |
 |  yen  |  ✔  |
 |  yendiff  |  ✔  |
 |  zerokernel  |    |

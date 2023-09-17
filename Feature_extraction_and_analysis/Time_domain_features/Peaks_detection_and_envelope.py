@@ -29,7 +29,7 @@ def update_array(a, data_tmp):
 
 
 
-def fpeak(signal,t):
+def fpeak(signal):
     """
     Description:
         Detect peaks in a signal and perform linear interpolation to obtain an envelope.
@@ -41,7 +41,7 @@ def fpeak(signal,t):
     Returns:
         peaks (numpy.ndarray): An array containing the indices of the detected peaks.
     """
-
+    t = np.arange(len(signal))
     # find all peaks in th signal
     peak_indices, _ = find_peaks(signal)
 
@@ -58,8 +58,9 @@ def fpeak(signal,t):
     peaks2 = update_array(peaks2, signal)
 
     # make sure the first peak is the higher peak
-    if(signal[peaks2[1]]>signal[peaks2[0]]):
-        peaks2 = np.delete(peaks2, 0)
+    if len(peaks2) > 1:
+        if(signal[peaks2[1]]>signal[peaks2[0]]):
+            peaks2 = np.delete(peaks2, 0)
 
     # make sure the number of peaks is even
     if len(peaks2)%2 != 0:
@@ -83,10 +84,10 @@ if __name__ == '__main__':
     signal = np.load(signal_path)[0, :1000]
 
     fs = 100
-    t = np.linspace(0, 10, 10 * fs)
+    # t = np.linspace(0, 10, 10 * fs)
 
-    peaks = fpeak(signal,t)
-
+    peaks = fpeak(signal)
+    t = np.arange(len(signal))
     plt.figure(figsize=(12, 6))
     plt.plot(t, signal)
     plt.plot(t[peaks], signal[peaks], 'o', color = 'green')

@@ -1,13 +1,17 @@
 import numpy as np
 import matplotlib.pyplot as plt
+
+
 import pywt
+import numpy as np
+import matplotlib.pyplot as plt
 
-
-def cwt(input, noctave, nvoice=1, w0=2 * np.pi, twoD=True, plot=False):
+def cwtp(input, noctave, nvoice=1, w0=2 * np.pi, twoD=True, plot=False):
     """
     Description:
-        Continuous wavelet transform function.
-        Computes the continuous wavelet transform with (complex-valued) Morlet wavelet using PyWavelets.
+        Continuous wavelet transform function with phase derivative.
+        Computes the continuous wavelet transform with (complex-valued) Morlet wavelet
+        and its phase derivative using PyWavelets.
 
     Params:
         input (numpy.ndarray): Input signal (possibly complex-valued).
@@ -19,7 +23,10 @@ def cwt(input, noctave, nvoice=1, w0=2 * np.pi, twoD=True, plot=False):
         plot (bool, optional): If set to True, displays the modulus of CWT on the graphic device.
 
     Returns:
-        numpy.ndarray: Continuous (complex) wavelet transform.
+        Continuous (complex) wavelet transform and the phase derivative.
+        wt: array of complex numbers for the values of the continuous wavelet transform.
+        f: array of the same dimensions containing the values of the derivative of the phase
+                 of the continuous wavelet transform.
     """
     scales = np.logspace(0, noctave, num=noctave * nvoice, base=2)
     coefs, frequencies = pywt.cwt(input, scales, 'morl', sampling_period=1.0 / w0)
@@ -32,7 +39,11 @@ def cwt(input, noctave, nvoice=1, w0=2 * np.pi, twoD=True, plot=False):
         plt.colorbar()
         plt.show()
 
-    return coefs
+
+    phase_derivative = np.gradient(np.angle(coefs), axis=1)
+
+
+    return coefs, phase_derivative
 
 
 
@@ -46,12 +57,13 @@ if __name__ == "__main__":
     signal = np.load(signal_path)[2, :1000]
     fs = 100
     noctave = 5
-    nvoice = 1
+    nvoice = 3
     w0 = 2 * np.pi
     twoD = True
     plot = True
 
-    cwt_result = cwt(signal, noctave, nvoice, w0, twoD, plot)
-    print(cwt_result.shape)
+    wt, f = cwtp(signal, noctave, nvoice, w0, twoD, plot)
 
 
+    print(wt.shape)
+    print(f.shape)

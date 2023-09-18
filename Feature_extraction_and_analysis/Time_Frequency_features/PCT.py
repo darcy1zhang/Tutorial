@@ -2,21 +2,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import convolve
 
-# 生成示例信号，这里使用正弦波信号作为示例
-sample_rate = 100
-t = np.arange(0, 10, 1 / sample_rate)
-signal = np.sin(2 * np.pi * 5 * t) + 0.5 * np.sin(2 * np.pi * 20 * t)
-
 
 # 定义Chirplet函数
 def chirplet(alpha, beta, gamma, t):
     return np.exp(1j * (alpha * t ** 2 + beta * t + gamma))
 
 
-# 设置Chirplet参数
-alpha = 0.1
-beta = 0.5
-gamma = 0.0
+
 
 
 # 定义PCT计算函数
@@ -31,26 +23,36 @@ def polynomial_chirplet_transform(signal, alpha, beta, gamma):
 
     return np.abs(pct_result)  # 提取振幅信息
 
+if __name__ == "__main__":
 
-# 执行PCT
-pct_result = polynomial_chirplet_transform(signal, alpha, beta, gamma)
+    sample_rate = 100
+    t = np.arange(0, 10, 1 / sample_rate)
+    signal = np.sin(2 * np.pi * 5 * t) + 0.5 * np.sin(2 * np.pi * 20 * t)
 
-# 绘制PCT结果
-plt.figure(figsize=(12, 6))
+    # 设置Chirplet参数
+    alpha = 0.1
+    beta = 0.5
+    gamma = 0.0
 
-# 信号图
-plt.subplot(2, 1, 1)
-plt.plot(t, signal)
-plt.title('Original Signal')
-plt.xlabel('Time (s)')
-plt.ylabel('Amplitude')
+    # 执行PCT
+    pct_result = polynomial_chirplet_transform(signal, alpha, beta, gamma)
 
-# PCT结果图
-plt.subplot(2, 1, 2)
-plt.plot(t, pct_result)
-plt.title('Polynomial Chirplet Transform Result')
-plt.xlabel('Time (s)')
-plt.ylabel('Amplitude')
+    # 绘制PCT结果
+    plt.figure(figsize=(12, 6))
 
-plt.tight_layout()
-plt.show()
+    # 信号图
+    plt.subplot(2, 1, 1)
+    plt.plot(t, signal)
+    plt.title('Original Signal')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Amplitude')
+
+    # PCT结果图
+    plt.subplot(2, 1, 2)
+    plt.plot(t, pct_result)
+    plt.title('Polynomial Chirplet Transform Result')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Amplitude')
+
+    plt.tight_layout()
+    plt.show()

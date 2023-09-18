@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-def perform_fft(signal, sampling_rate):
+def perform_fft(signal, sampling_rate, show):
     """
     Description:
         Perform Fast Fourier Transform (FFT) on a given signal.
@@ -19,6 +19,16 @@ def perform_fft(signal, sampling_rate):
     frequencies = np.fft.fftfreq(n, d=1 / sampling_rate)
     fft_result = np.fft.fft(signal)
 
+    if show:
+        plt.figure(figsize=(8, 6))
+        plt.plot(frequencies, np.abs(fft_result))
+        # plt.plot(np.abs(fft_result))
+        plt.xlabel('Frequency (Hz)')
+        plt.ylabel('Magnitude')
+        plt.title('FFT Spectrum')
+        plt.grid()
+        plt.show()
+
     return fft_result, frequencies
 
 
@@ -30,16 +40,10 @@ if __name__ == "__main__":
 
     signal_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(current_file_path))), "data",
                                signal_name)
-    signal = np.load(signal_path)[2, :1000]
+    signal = np.load(signal_path)[0, :1000]
     fs = 100
     time = np.arange(0, 10, 1 / fs)
 
-    fft_result, frequencies = perform_fft(signal, fs)
+    fft_result, frequencies = perform_fft(signal, fs, True)
 
-    plt.figure(figsize=(8, 6))
-    plt.plot(frequencies, np.abs(fft_result))
-    plt.xlabel('Frequency (Hz)')
-    plt.ylabel('Magnitude')
-    plt.title('FFT Spectrum')
-    plt.grid()
-    plt.show()
+

@@ -3,6 +3,8 @@ import tsfel
 import matplotlib.pyplot as plt
 import json
 
+# 目前还有一点问题
+
 def temporal_feature_extract(signal,index,fs, window_size):
     """
     Description:

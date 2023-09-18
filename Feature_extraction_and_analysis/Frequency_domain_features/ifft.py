@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from fft import perform_fft
+from .fft import perform_fft
 
 def perform_ifft(fft_result):
     """

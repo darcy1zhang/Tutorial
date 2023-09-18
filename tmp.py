@@ -1,40 +1,9 @@
-import numpy as np
-import matplotlib.pyplot as plt
+from Academic_signals_generation import *
+from Feature_extraction_and_analysis import *
 
-def plotresult(result, original, maxresoln, scale=False, yaxtype="s"):
-    plt.rcParams.update({'figure.figsize': (8, 6)})
+# data,_,_,_ = load_scg(0.1,"train")
+# data = data[1,:]
+# plt.plot(data)
+# plt.show()
 
-    if not scale:
-        plt.subplot(maxresoln + 1, 1, 1)
-        plt.plot(original)
-        plt.title("Original Signal")
-
-        for j in range(maxresoln):
-            plt.subplot(maxresoln + 1, 1, j + 2)
-            plt.plot(result[:, j])
-            plt.title(f'Resolution {j + 1}')
-    else:
-        ymin = np.min(result)
-        ymax = np.max(result)
-
-        plt.subplot(maxresoln + 1, 1, 1)
-        plt.plot(original)
-        plt.title("Original Signal")
-
-        for j in range(maxresoln):
-            plt.subplot(maxresoln + 1, 1, j + 2)
-            plt.plot(result[:, j])
-            plt.ylim(ymin, ymax)
-            plt.title(f'Resolution {j + 1}')
-
-    plt.tight_layout()
-    plt.show()
-
-# 示例用法
-if __name__ == "__main__":
-    # 构造一个示例的result和original
-    original = np.random.rand(256)
-    maxresoln = 4
-    result = np.random.rand(256, maxresoln)
-
-    plotresult(result, original, maxresoln, scale=True)
+help(STFT)

@@ -1,0 +1,10 @@
+numpy==1.23.5
+matplotlib==3.5.1
+scipy==1.10.1
+tsfel==0.1.5
+fastsst==0.0.4
+pandas==2.0.3
+PyWavelets==1.4.1
+tftb==0.1.4
+seaborn==0.12.2
+tqdm==4.65.0

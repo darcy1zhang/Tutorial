@@ -1,6 +1,7 @@
 import numpy as np
 import pywt
 
+# 这个函数有点问题，还未解决
 
 def dwinverse(wt, filtername="haar"):
     """

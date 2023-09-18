@@ -6,9 +6,6 @@ import matplotlib.pyplot as plt
 from numpy import asarray, zeros, place, nan, mod, pi, extract, log, sqrt, \
     exp, cos, sin, polyval, polyint
 
-#%%
-import numpy as np
-import matplotlib.pyplot as plt
 
 def generate_white_noise(length_seconds, sampling_rate, plot=False):
     r"""
@@ -402,8 +399,7 @@ def generate_shot_noise(length_seconds, sampling_rate, rate, plot=False):
 
 
 #%%
-import numpy as np
-import matplotlib.pyplot as plt
+
 
 def generate_flicker_noise(length_seconds, sampling_rate, exponent, amplitude=1.0, plot=False):
     r"""
@@ -454,8 +450,7 @@ def generate_flicker_noise(length_seconds, sampling_rate, exponent, amplitude=1.
     return flicker_noise
 
 #%%
-import numpy as np
-import matplotlib.pyplot as plt
+
 
 def generate_burst_noise(length_seconds, sampling_rate, burst_rate, burst_duration, amplitude_range, plot=False):
     r"""
@@ -512,8 +507,7 @@ def generate_burst_noise(length_seconds, sampling_rate, burst_rate, burst_durati
 
 
 #%%
-import numpy as np
-import matplotlib.pyplot as plt
+
 
 def generate_atmospheric_noise(length_seconds, sampling_rate, frequency_range, plot=False):
     r"""

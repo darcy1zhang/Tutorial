@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.signal
 
-def compute_linear_spectrogram(signal, sample_rate, window_size=512, overlap=0.5, window = "hann"):
+def STFT(signal, sample_rate, window_size=512, overlap=0.5, window = "hann"):
     """
     Description:
         Compute the Linear Spectrogram of a signal using Short-time Fourier Transform (STFT).
@@ -37,7 +37,7 @@ if __name__ == "__main__":
     signal = np.load(signal_path)[2,:1000]
     fs = 100
 
-    freqs, times, spectrogram = compute_linear_spectrogram(signal, fs, 10)
+    freqs, times, spectrogram = STFT(signal, fs, 10)
 
 
     plt.figure(figsize=(10, 6))

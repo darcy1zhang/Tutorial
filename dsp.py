@@ -1,5 +1,63 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+def perform_ifft(signal, show):
+    """
+    Description:
+        Perform Inverse Fast Fourier Transform (IFFT) on a given FFT result.
+
+    Params:
+        fft_result (numpy.ndarray): The FFT result.
+
+    Return:
+        numpy.ndarray: Array of complex numbers representing the IFFT result.
+    """
+
+    ifft_result = np.fft.ifft(signal)
+    if show:
+        plt.plot(ifft_result)
+        plt.show()
+
+    return ifft_result
+
+def plot_scg(signal):
+    plt.plot(signal)
+    plt.show()
+    return signal
+
+def perform_fft(signal, sampling_rate, show):
+    """
+    Description:
+        Perform Fast Fourier Transform (FFT) on a given signal.
+
+    Params:
+        signal (numpy.ndarray): The input signal.
+        sampling_rate (float): The sampling rate of the signal.
+
+    Return:
+        numpy.ndarray: Array of complex numbers representing the FFT result.
+        numpy.ndarray: Array of corresponding frequency values.
+    """
+
+    n = len(signal)
+    frequencies = np.fft.fftfreq(n, d=1 / sampling_rate)
+    fft_result = np.fft.fft(signal)
+
+    if show:
+        plt.figure(figsize=(8, 6))
+        plt.plot(frequencies, np.abs(fft_result))
+        plt.xlabel('Frequency (Hz)')
+        plt.ylabel('Magnitude')
+        plt.title('FFT Spectrum')
+        plt.grid()
+        plt.show()
+
+    return fft_result
+
+
 if __name__ == '__main__':
-    from Dataset import load_scg
+    import Academic_signals_generation
+    import Feature_extraction_and_analysis
 
     def check_arguments():
         pass
@@ -54,8 +112,8 @@ if __name__ == '__main__':
 
     def load_data(data_source):
         # it is an easy implement
-        signals_train, labels_train, duration, fs = load_scg(0.1, 'train')
-        return signals_train[0]
+        signals_train, labels_train, duration, fs = Academic_signals_generation.load_scg(0.1, 'train')
+        return signals_train[1]
 
     def check_func_types(funcname_params):
         transformers= []

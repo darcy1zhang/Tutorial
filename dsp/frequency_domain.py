@@ -5,22 +5,40 @@ from scipy.signal import butter, lfilter
 from scipy.signal import welch
 from scipy.stats import entropy
 from scipy.stats import kurtosis, skew
+from numpy.fft import fft, ifft, fftfreq
 
 
-def perform_ifft(fft_result):
+def my_fft(signal, fs):
     """
     Description:
-        Perform Inverse Fast Fourier Transform (IFFT) on a given FFT result.
-
-    Params:
-        fft_result (numpy.ndarray): The FFT result.
-
-    Return:
-        numpy.ndarray: Array of complex numbers representing the IFFT result.
+        Get the spectrum of the input signal
+    Args:
+        signal: input signal
+        fs: sampling rate
+    Returns:
+        The spectrum of the input, containing the freq of x-axis and the mag of the y-axis. The mag is complex.
     """
+    l = len(signal)
+    mag = fft(signal)
+    freq = fftfreq(l, 1 / fs)
+    mag = mag / l * 2
 
-    ifft_result = np.fft.ifft(fft_result)
-    return ifft_result
+    return freq, mag
+
+
+def my_ifft(mag):
+    """
+    Description:
+        Use the mag of my_fft to recover the original signal
+    Args:
+        mag: Output of my_fft
+    Returns:
+        The recovered original signal
+    """
+    mag = mag / 2 * len(mag)
+    x = ifft(mag)
+
+    return x
 
 
 
@@ -349,37 +367,6 @@ def DCT_iv(ys):
 
 def inverse_DCT_iv(amps):
     return DCT_iv(amps) * 2
-
-
-def perform_fft(signal, sampling_rate, show):
-    """
-    Description:
-        Perform Fast Fourier Transform (FFT) on a given signal.
-
-    Params:
-        signal (numpy.ndarray): The input signal.
-        sampling_rate (float): The sampling rate of the signal.
-
-    Return:
-        numpy.ndarray: Array of complex numbers representing the FFT result.
-        numpy.ndarray: Array of corresponding frequency values.
-    """
-
-    n = len(signal)
-    frequencies = np.fft.fftfreq(n, d=1 / sampling_rate)
-    fft_result = np.fft.fft(signal)
-
-    if show:
-        plt.figure(figsize=(8, 6))
-        plt.plot(frequencies, np.abs(fft_result))
-        # plt.plot(np.abs(fft_result))
-        plt.xlabel('Frequency (Hz)')
-        plt.ylabel('Magnitude')
-        plt.title('FFT Spectrum')
-        plt.grid()
-        plt.show()
-
-    return fft_result, frequencies
 
 
 

@@ -9,6 +9,7 @@ from scipy.interpolate import interp1d
 import json
 import tsfel
 from scipy.fft import fft,ifft
+from sklearn.metrics import mean_squared_error
 
 
 def cal_corrcoef(signal1, signal2):
@@ -116,6 +117,69 @@ def envelope_hilbert(signal, fs):
     return inst_amplitude, inst_freq, inst_phase, regenerated_carrier
 
 
+
+def get_template(signal):
+    """
+    Description:
+        use cluster method to get the template
+    Args:
+        signal: the periodic signal
+    Returns:
+        The template of the periodic signal
+    """
+
+    peaks2 = get_peaks(signal)
+
+    avg_index = (peaks2[::2] + peaks2[1::2]) // 2
+
+    # 使用这些平均数作为x的下标，将x切割成多个部分
+    splits = np.split(signal, avg_index)
+
+    max_length = max(len(split) for split in splits)
+
+    # 补充每个部分使其长度相等
+    padded_splits = [np.pad(split, (0, max_length - len(split))) for split in splits]
+
+    # 将这些部分堆叠成一个二维数组
+    stacked_array = np.vstack(padded_splits)
+    stacked_array = np.delete(stacked_array, 0, axis=0)
+
+    class PulseClustering:
+        def __init__(self, threshold):
+            self.threshold = threshold
+            self.clusters = []
+
+        def fit(self, pulses):
+            for pulse in pulses:
+                if not self.clusters:  # 如果聚类为空，创建第一个聚类
+                    self.clusters.append([pulse])
+                else:
+                    for cluster in self.clusters:
+                        center_pulse = np.mean(cluster, axis=0)  # 计算聚类中心
+                        rmse = np.sqrt(mean_squared_error(center_pulse, pulse))  # 计算RMSE
+                        if rmse < self.threshold:  # 如果RMSE低于阈值，将脉冲添加到聚类中
+                            cluster.append(pulse)
+                            break
+                    else:  # 如果脉冲与现有的所有聚类的中心的RMSE都高于阈值，创建新的聚类
+                        self.clusters.append([pulse])
+
+        def get_clusters(self):
+            return self.clusters
+
+    threshold = 0.000005  # 这是一个选择的阈值
+
+    clustering = PulseClustering(threshold)
+    clustering.fit(stacked_array)
+    clusters = clustering.get_clusters()
+
+    num_pulses_per_cluster = [len(cluster) for cluster in clusters]
+
+    max_cluster = max(clusters, key=len)
+
+    # 计算最大聚类的平均脉冲
+    average_pulse = np.mean(max_cluster, axis=0)
+    return average_pulse
+
 def update_array(a, data_tmp):
     """
     Description:
@@ -139,7 +203,7 @@ def update_array(a, data_tmp):
     return a
 
 
-def fpeak(signal):
+def get_peaks(signal):
     """
     Description:
         Detect peaks in a signal and perform linear interpolation to obtain an envelope.
@@ -238,7 +302,7 @@ if __name__ == "__main__":
     fs = 100
     # t = np.linspace(0, 10, 10 * fs)
 
-    peaks = fpeak(signal)
+    peaks = get_peaks(signal)
     t = np.arange(len(signal))
     plt.figure(figsize=(12, 6))
     plt.plot(t, signal)

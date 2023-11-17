@@ -1,7 +1,461 @@
-import numpy as np
-import math
 import matplotlib.pyplot as plt
+import numpy as np
+import scipy
+import scipy.signal
+from scipy.signal import butter, lfilter, hilbert, chirp, welch, find_peaks
+from scipy.stats import entropy, kurtosis, skew
+from scipy.interpolate import interp1d
+from scipy.fft import fft,ifft
+from numpy.fft import fft, ifft, fftfreq
 import os
+import json
+import tsfel
+from sklearn.metrics import mean_squared_error
+import pywt
+import tftb
+
+
+
+def my_fft(signal, fs):
+    """
+    Description:
+        Get the spectrum of the input signal
+    Args:
+        signal: input signal
+        fs: sampling rate
+    Returns:
+        The spectrum of the input, containing the freq of x-axis and the mag of the y-axis. The mag is complex.
+    """
+    l = len(signal)
+    mag = fft(signal)
+    freq = fftfreq(l, 1 / fs)
+    mag = mag / l * 2
+
+    return freq, mag
+
+
+def my_ifft(mag):
+    """
+    Description:
+        Use the mag of my_fft to recover the original signal
+    Args:
+        mag: Output of my_fft
+    Returns:
+        The recovered original signal
+    """
+    mag = mag / 2 * len(mag)
+    x = ifft(mag)
+
+    return x
+
+
+
+def extract_spectral_power(signal, fs, frequency_band):
+    """
+    Description:
+        Extract the spectral power of a signal within a specified frequency band.
+
+    Params:
+        signal (numpy.ndarray): Input signal.
+        fs (float): Sampling frequency of the signal.
+        frequency_band (tuple): Frequency band of interest (lowcut, highcut) in Hz.
+
+    Returns:
+        float: Spectral power within the specified frequency band.
+    """
+
+    f, Pxx = welch(signal, fs=fs)
+    mask = (f >= frequency_band[0]) & (f <= frequency_band[1])
+    spectral_power = np.sum(Pxx[mask])
+    return spectral_power
+
+def extract_peak_frequency(signal, fs):
+    """
+    Description:
+        Extract the frequency with the highest spectral amplitude (peak frequency).
+
+    Params:
+        signal (numpy.ndarray): Input signal.
+        fs (float): Sampling frequency of the signal.
+
+    Returns:
+        float: Frequency with the highest spectral amplitude (peak frequency).
+    """
+
+    f, Pxx = welch(signal, fs=fs)
+    peak_frequency = f[np.argmax(Pxx)]
+    return peak_frequency
+
+
+def extract_power_spectral_density(signal, fs):
+    """
+    Description:
+        Extract the power spectral density (PSD) of a signal.
+
+    Params:
+        signal (numpy.ndarray): Input signal.
+        fs (float): Sampling frequency of the signal.
+
+    Returns:
+        numpy.ndarray: Frequency vector.
+        numpy.ndarray: Power spectral density values.
+    """
+
+    f, Pxx = welch(signal, fs=fs)
+    return f, Pxx
+
+def extract_spectral_entropy(signal, fs, num_segments=10):
+    """
+    Description:
+        Extract the spectral entropy of a signal.
+
+    Params:
+        signal (numpy.ndarray): Input signal.
+        fs (float): Sampling frequency of the signal.
+        num_segments (int, optional): Number of segments for entropy calculation.
+
+    Returns:
+        float: Spectral entropy value.
+    """
+
+    f, Pxx = welch(signal, fs=fs)
+    segment_size = len(f) // num_segments
+    segment_entropies = []
+
+    for i in range(num_segments):
+        start_idx = i * segment_size
+        end_idx = (i + 1) * segment_size
+        segment_Pxx = Pxx[start_idx:end_idx]
+        segment_entropies.append(entropy(segment_Pxx))
+
+    spectral_entropy = np.mean(segment_entropies)
+    return spectral_entropy
+
+
+def extract_spectral_kurtosis(signal, fs):
+    """
+    Description:
+        Extract the spectral kurtosis of a signal.
+
+    Params:
+        signal (numpy.ndarray): Input signal.
+        fs (float): Sampling frequency of the signal.
+
+    Returns:
+        float: Spectral kurtosis value.
+    """
+
+    f, Pxx = welch(signal, fs=fs)
+    spectral_kurtosis = kurtosis(Pxx)
+    return spectral_kurtosis
+
+def extract_spectral_skewness(signal, fs):
+    """
+    Description:
+        Extract the spectral skewness of a signal.
+
+    Params:
+        signal (numpy.ndarray): Input signal.
+        fs (float): Sampling frequency of the signal.
+
+    Returns:
+        float: Spectral skewness value.
+    """
+
+    f, Pxx = welch(signal, fs=fs)
+    spectral_skewness = skew(Pxx)
+    return spectral_skewness
+
+def extract_mean_spectral_energy(signal, fs):
+    """
+    Description:
+        Extract the mean spectral energy of a signal.
+
+    Params:
+        signal (numpy.ndarray): Input signal.
+        fs (float): Sampling frequency of the signal.
+
+    Returns:
+        float: Mean spectral energy value.
+    """
+
+    f, Pxx = welch(signal, fs=fs)
+    mean_spectral_energy = np.mean(Pxx)
+    return mean_spectral_energy
+
+def extract_spectral_power(signal, fs, frequency_band):
+    """
+    Description:
+        Extract the spectral power of a signal within a specified frequency band.
+
+    Params:
+        signal (numpy.ndarray): Input signal.
+        fs (float): Sampling frequency of the signal.
+        frequency_band (tuple): Frequency band of interest (lowcut, highcut) in Hz.
+
+    Returns:
+        float: Spectral power within the specified frequency band.
+    """
+
+    f, Pxx = welch(signal, fs=fs)
+    mask = (f >= frequency_band[0]) & (f <= frequency_band[1])
+    spectral_power = np.sum(Pxx[mask])
+    return spectral_power
+
+def extract_peak_frequency(signal, fs):
+    """
+    Description:
+        Extract the frequency with the highest spectral amplitude (peak frequency).
+
+    Params:
+        signal (numpy.ndarray): Input signal.
+        fs (float): Sampling frequency of the signal.
+
+    Returns:
+        float: Frequency with the highest spectral amplitude (peak frequency).
+    """
+
+    f, Pxx = welch(signal, fs=fs)
+    peak_frequency = f[np.argmax(Pxx)]
+    return peak_frequency
+
+
+def extract_power_spectral_density(signal, fs):
+    """
+    Description:
+        Extract the power spectral density (PSD) of a signal.
+
+    Params:
+        signal (numpy.ndarray): Input signal.
+        fs (float): Sampling frequency of the signal.
+
+    Returns:
+        numpy.ndarray: Frequency vector.
+        numpy.ndarray: Power spectral density values.
+    """
+
+    f, Pxx = welch(signal, fs=fs)
+    return f, Pxx
+
+def extract_spectral_entropy(signal, fs, num_segments=10):
+    """
+    Description:
+        Extract the spectral entropy of a signal.
+
+    Params:
+        signal (numpy.ndarray): Input signal.
+        fs (float): Sampling frequency of the signal.
+        num_segments (int, optional): Number of segments for entropy calculation.
+
+    Returns:
+        float: Spectral entropy value.
+    """
+
+    f, Pxx = welch(signal, fs=fs)
+    segment_size = len(f) // num_segments
+    segment_entropies = []
+
+    for i in range(num_segments):
+        start_idx = i * segment_size
+        end_idx = (i + 1) * segment_size
+        segment_Pxx = Pxx[start_idx:end_idx]
+        segment_entropies.append(entropy(segment_Pxx))
+
+    spectral_entropy = np.mean(segment_entropies)
+    return spectral_entropy
+
+
+def extract_spectral_kurtosis(signal, fs):
+    """
+    Description:
+        Extract the spectral kurtosis of a signal.
+
+    Params:
+        signal (numpy.ndarray): Input signal.
+        fs (float): Sampling frequency of the signal.
+
+    Returns:
+        float: Spectral kurtosis value.
+    """
+
+    f, Pxx = welch(signal, fs=fs)
+    spectral_kurtosis = kurtosis(Pxx)
+    return spectral_kurtosis
+
+def extract_spectral_skewness(signal, fs):
+    """
+    Description:
+        Extract the spectral skewness of a signal.
+
+    Params:
+        signal (numpy.ndarray): Input signal.
+        fs (float): Sampling frequency of the signal.
+
+    Returns:
+        float: Spectral skewness value.
+    """
+
+    f, Pxx = welch(signal, fs=fs)
+    spectral_skewness = skew(Pxx)
+    return spectral_skewness
+
+def extract_mean_spectral_energy(signal, fs):
+    """
+    Description:
+        Extract the mean spectral energy of a signal.
+
+    Params:
+        signal (numpy.ndarray): Input signal.
+        fs (float): Sampling frequency of the signal.
+
+    Returns:
+        float: Mean spectral energy value.
+    """
+
+    f, Pxx = welch(signal, fs=fs)
+    mean_spectral_energy = np.mean(Pxx)
+    return mean_spectral_energy
+
+
+def DCT_synthesize(amps, fs, ts):
+    """
+    Description:
+        Synthesize a mixture of cosines with given amps and fs.
+
+    Input:
+        amps: amplitudes
+        fs: frequencies in Hz
+        ts: times to evaluate the signal
+
+    Returns:
+        wave array
+    """
+    args = np.outer(ts, fs)
+    M = np.cos(np.pi * 2 * args)
+    ys = np.dot(M, amps)
+    return ys
+
+def DCT_analyze(ys, fs, ts):
+    """
+    Description:
+        Analyze a mixture of cosines and return amplitudes.
+
+    Input:
+        ys: wave array
+        fs: frequencies in Hz
+        ts: time when the signal was evaluated
+
+    returns:
+        vector of amplitudes
+    """
+    args = np.outer(ts, fs)
+    M = np.cos(np.pi * 2 * args)
+    amps = np.dot(M, ys) / 2
+    return amps
+
+def DCT_iv(ys):
+    """
+    Description:
+        Computes DCT-IV.
+
+    Input:
+        wave array
+
+    returns:
+        vector of amplitudes
+    """
+    N = len(ys)
+    ts = (0.5 + np.arange(N)) / N
+    fs = (0.5 + np.arange(N)) / 2
+    args = np.outer(ts, fs)
+    M = np.cos(np.pi * 2 * args)
+    amps = np.dot(M, ys) / 2
+    return amps
+
+
+def inverse_DCT_iv(amps):
+    return DCT_iv(amps) * 2
+
+
+
+def butter_bandpass(lowcut, highcut, fs, order=5):
+    """
+    Description:
+        Design a bandpass Butterworth filter.
+
+    Params:
+        lowcut (float): Lower cutoff frequency of the bandpass filter in Hz.
+        highcut (float): Upper cutoff frequency of the bandpass filter in Hz.
+        fs (float): Sampling frequency in Hz.
+        order (int, optional): Order of the filter (default is 5).
+
+    Returns:
+        numpy.ndarray: Numerator coefficients of the filter.
+        numpy.ndarray: Denominator coefficients of the filter.
+    """
+
+    nyquist = 0.5 * fs
+    low = lowcut / nyquist
+    high = highcut / nyquist
+    b, a = butter(order, [low, high], btype='band')
+    return b, a
+
+def butter_lowpass(cutoff, fs, order=5):
+    """
+    Description:
+        Design a lowpass Butterworth filter.
+
+    Params:
+        cutoff (float): Cutoff frequency of the lowpass filter in Hz.
+        fs (float): Sampling frequency in Hz.
+        order (int, optional): Order of the filter (default is 5).
+
+    Returns:
+        numpy.ndarray: Numerator coefficients of the filter.
+        numpy.ndarray: Denominator coefficients of the filter.
+    """
+
+    nyquist = 0.5 * fs
+    normal_cutoff = cutoff / nyquist
+    b, a = butter(order, normal_cutoff, btype='low', analog=False)
+    return b, a
+
+def butter_highpass(cutoff, fs, order=5):
+    """
+    Description:
+        Design a highpass Butterworth filter.
+
+    Params:
+        cutoff (float): Cutoff frequency of the highpass filter in Hz.
+        fs (float): Sampling frequency in Hz.
+        order (int, optional): Order of the filter (default is 5).
+
+    Returns:
+        numpy.ndarray: Numerator coefficients of the filter.
+        numpy.ndarray: Denominator coefficients of the filter.
+    """
+    nyquist = 0.5 * fs
+    normal_cutoff = cutoff / nyquist
+    b, a = butter(order, normal_cutoff, btype='high', analog=False)
+    return b, a
+
+def butter_filter(data, b, a):
+    """
+    Description:
+        Apply a digital IIR filter to the input data.
+
+    Params:
+        data (numpy.ndarray): Input data to be filtered.
+        b (numpy.ndarray): Numerator coefficients of the filter.
+        a (numpy.ndarray): Denominator coefficients of the filter.
+
+    Returns:
+        numpy.ndarray: Filtered output data.
+    """
+    y = lfilter(b, a, data)
+    return y
+
+
 
 def sine_wave(length_seconds, sampling_rate, frequencies, func="sin", add_noise=0, plot=False):
     """
@@ -1110,46 +1564,339 @@ def load_scg_template(noise_level, train_or_test: str):
     return signals, labels, duration, fs
 
 
-if __name__ == '__main__':
-
-    t = np.linspace(0, 10, 1500)
-
-    # data = sine_wave(length_seconds=10,
-    #          sampling_rate=100,
-    #          frequencies=[1],
-    #         #  add_noise=0.5,
-    #          plot=False
-    #      )
-
-    # data = triangle_wave(
-    #     t = 2 * np.pi * 5 * t,
-    #     width = 0.5
-    # )
-
-    # data = square_wave(
-    #     2 * np.pi * 5 * t
-    # )
-
-    data = chirp_wave(
-        t, f0=6, f1=1, t1=10, method='linear')
 
 
+def cal_corrcoef(signal1, signal2):
+    """
+    Description:
+        To get the correlate coefficient
 
-    print(data.shape)
-    plt.figure(figsize=(20, 4))
-    plt.title("simulated sine waves")
-    # plt.plot (data1)
-    # plt.plot (data2)
-    plt.plot(data)
-    plt.show()
+    Input:
+        Two signal with same length
 
-    # wn = white_noise(length_seconds=5, sampling_rate=44100, plot=True)
-    blwn = band_limited_white_noise(length_seconds=5, sampling_rate=44100, frequency_range=(20, 2000),
-                                             plot=True)
+    Return:
+        The correlate coefficient
+    """
+    return np.corrcoef(signal1, signal2)[0,1]
 
-    # signals,labels,duration,fs = load_scg(0.1, 'test')
-    # # load_scg_template(0.1, 'test')
-    # print(signals.shape)
-    # print(labels.shape)
-    # print(duration)
-    # print(fs)
+def cal_serial_corr(signal, lag):
+    """
+    Description:
+        To get the serial correlate coefficient
+
+    Input:
+        One signal and the lag which means how much it delays
+
+    Return:
+        The serial correlate coefficient
+    """
+    signal1 = signal[lag:]
+    signal2 = signal[:len(signal)-lag]
+    return np.corrcoef(signal1, signal2)[0,1]
+
+def cal_autocorr(signal, plot = False):
+    """
+    Description:
+        To get the auto correlate coefficient
+
+    Input:
+        One signal
+
+    Return:
+        The serial correlate coefficient with different lag which is from 0 to len(wave)//2
+    """
+    lags = range(len(signal)//2)
+    corrs = [cal_serial_corr(signal, lag) for lag in lags]
+    if plot:
+        plt.plot(lags, corrs)
+        plt.show()
+    return lags, corrs
+
+
+def analytic_signal(x):
+    """
+    Description:
+        Get the analytic version of the input signal
+    Args:
+        x: input signal which is a real-valued signal
+    Returns:
+        The analytic version of the input signal which is a complex-valued signal
+    """
+    N = len(x)
+    X = fft(x,N)
+    h = np.zeros(N)
+    h[0] = 1
+    h[1:N//2] = 2*np.ones(N//2-1)
+    h[N//2] = 1
+    Z = X*h
+    z = ifft(Z,N)
+    return z
+
+def hilbert_transform(x):
+    """
+    Description:
+        Get the hilbert transformation of the input signal
+    Args:
+        x: a real-valued singal
+    Returns:
+        Return the result of hilbert transformation which is the imaginary part of the analytic signal
+    """
+    z = analytic_signal(x)
+    return z.imag
+
+def envelope_hilbert(signal, fs):
+    """
+    Description:
+        Analyzes a signal using the Hilbert Transform to extract envelope and phase information.
+
+    Params:
+        signal (array-like): The input signal to be analyzed.
+        fs (float): The sampling frequency of the input signal.
+
+    Returns:
+        inst_amplitude (array-like): The instantaneous amplitude of the signal envelope.
+        inst_freq (array-like): The instantaneous frequency of the signal.
+        inst_phase (array-like): The instantaneous phase of the signal.
+        regenerated_carrier (array-like): The regenerated carrier signal from the instantaneous phase.
+    """
+
+    z= hilbert(signal) #form the analytical signal
+    inst_amplitude = np.abs(z) #envelope extraction
+    inst_phase = np.unwrap(np.angle(z))#inst phase
+    inst_freq = np.diff(inst_phase)/(2*np.pi)*fs #inst frequency
+
+    #Regenerate the carrier from the instantaneous phase
+    regenerated_carrier = np.cos(inst_phase)
+
+    return inst_amplitude, inst_freq, inst_phase, regenerated_carrier
+
+
+
+def get_template(signal):
+    """
+    Description:
+        use cluster method to get the template
+    Args:
+        signal: the periodic signal
+    Returns:
+        The template of the periodic signal
+    """
+
+    peaks2 = get_peaks(signal)
+
+    avg_index = (peaks2[::2] + peaks2[1::2]) // 2
+
+    # 使用这些平均数作为x的下标，将x切割成多个部分
+    splits = np.split(signal, avg_index)
+
+    max_length = max(len(split) for split in splits)
+
+    # 补充每个部分使其长度相等
+    padded_splits = [np.pad(split, (0, max_length - len(split))) for split in splits]
+
+    # 将这些部分堆叠成一个二维数组
+    stacked_array = np.vstack(padded_splits)
+    stacked_array = np.delete(stacked_array, 0, axis=0)
+
+    class PulseClustering:
+        def __init__(self, threshold):
+            self.threshold = threshold
+            self.clusters = []
+
+        def fit(self, pulses):
+            for pulse in pulses:
+                if not self.clusters:  # 如果聚类为空，创建第一个聚类
+                    self.clusters.append([pulse])
+                else:
+                    for cluster in self.clusters:
+                        center_pulse = np.mean(cluster, axis=0)  # 计算聚类中心
+                        rmse = np.sqrt(mean_squared_error(center_pulse, pulse))  # 计算RMSE
+                        if rmse < self.threshold:  # 如果RMSE低于阈值，将脉冲添加到聚类中
+                            cluster.append(pulse)
+                            break
+                    else:  # 如果脉冲与现有的所有聚类的中心的RMSE都高于阈值，创建新的聚类
+                        self.clusters.append([pulse])
+
+        def get_clusters(self):
+            return self.clusters
+
+    threshold = 0.000005  # 这是一个选择的阈值
+
+    clustering = PulseClustering(threshold)
+    clustering.fit(stacked_array)
+    clusters = clustering.get_clusters()
+
+    num_pulses_per_cluster = [len(cluster) for cluster in clusters]
+
+    max_cluster = max(clusters, key=len)
+
+    # 计算最大聚类的平均脉冲
+    average_pulse = np.mean(max_cluster, axis=0)
+    return average_pulse
+
+def update_array(a, data_tmp):
+    """
+    Description:
+        Update an array 'a' by removing elements based on the pattern in 'data_tmp'.
+
+    Params:
+        a (numpy.ndarray): The input array to be updated.
+        data_tmp (numpy.ndarray): The data array used for comparison.
+
+    Returns:
+        updated_array (numpy.ndarray): The updated array after removing elements.
+    """
+    i = 0
+    while i < len(a) - 2:
+        if data_tmp[a[i]] < data_tmp[a[i + 1]] < data_tmp[a[i + 2]]:
+            a = np.delete(a, i)
+        elif data_tmp[a[i]] > data_tmp[a[i + 1]] > data_tmp[a[i + 2]]:
+            a = np.delete(a, i + 2)
+        else:
+            i += 1
+    return a
+
+
+def get_peaks(signal):
+    """
+    Description:
+        Detect peaks in a signal and perform linear interpolation to obtain an envelope.
+
+    Params:
+        signal (numpy.ndarray): The input signal.
+        t (numpy.ndarray): The corresponding time values for the signal.
+
+    Returns:
+        peaks (numpy.ndarray): An array containing the indices of the detected peaks.
+    """
+    t = np.arange(len(signal))
+    # find all peaks in th signal
+    peak_indices, _ = find_peaks(signal)
+
+    # interpolate the peaks to form the envelope
+    t_peaks = t[peak_indices]
+    peak_values = signal[peak_indices]
+    interpolation_func = interp1d(t_peaks, peak_values, kind='linear', bounds_error=False, fill_value=0)
+    envelope = interpolation_func(t)
+
+    # find the peaks of envelope
+    peaks2, _ = find_peaks(envelope, distance=10)
+
+    # remove wrong peaks
+    peaks2 = update_array(peaks2, signal)
+
+    # make sure the first peak is the higher peak
+    if len(peaks2) > 1:
+        if (signal[peaks2[1]] > signal[peaks2[0]]):
+            peaks2 = np.delete(peaks2, 0)
+
+    # make sure the number of peaks is even
+    if len(peaks2) % 2 != 0:
+        peaks2 = np.delete(peaks2, len(peaks2) - 1)
+
+    return peaks2
+
+def tsfel_feature(signal, fs = 100):
+
+    with open("../json/all_features.json", 'r') as file:
+        cgf_file = json.load(file)
+
+    # cgf_file = tsfel.get_features_by_domain("temporal")
+
+    features = tsfel.time_series_features_extractor(cgf_file, signal, fs=fs, window_size=len(signal),
+                                                    features_path="../utils/my_features.py").values.flatten()
+
+    return features
+
+
+
+def get_wvd(signal, fs, T):
+    """
+    Description:
+        Analyze the time-frequency characteristics of a signal using the Wigner-Ville Transform (WVT) and visualize the results.
+
+    Params:
+        signal (numpy.ndarray): The input signal.
+        fs (float): The sampling frequency of the signal.
+        T (float): Time of the signal
+
+    Returns:
+        tfr_wvd (numpy.ndarray): The time-frequency representation (WVD) of the signal.
+        t_wvd (numpy.ndarray): Time values corresponding to the WVD.
+        f_wvd (numpy.ndarray): Normalized frequency values corresponding to the WVD.
+    """
+
+    t = np.arange(0, T, 1.0 / fs)
+
+    # Doing the WVT
+    wvd = tftb.processing.WignerVilleDistribution(signal, timestamps=t)
+    tfr_wvd, t_wvd, f_wvd = wvd.run()
+
+
+    return tfr_wvd, t_wvd, f_wvd
+
+def STFT(signal, sample_rate, window_size=512, overlap=0.5, window = "hann"):
+    """
+    Description:
+        Compute the Linear Spectrogram of a signal using Short-time Fourier Transform (STFT).
+
+    Params:
+        signal (numpy.ndarray): The input signal.
+        sample_rate (int): The sample rate of the signal.
+        window_size (int, optional): The size of the analysis window in samples. Default is 512.
+        overlap (float, optional): The overlap between successive windows, as a fraction of the window size. Default is 0.5.
+
+    Returns:
+        freqs (numpy.ndarray): The frequency values in Hz.
+        times (numpy.ndarray): The time values in seconds.
+        spectrogram (numpy.ndarray): The computed linear spectrogram.
+    """
+
+    # Compute the Linear Spectrogram using scipy.signal.spectrogram
+    frequencies, times, Sxx = scipy.signal.spectrogram(signal, fs=sample_rate, window='hann', nperseg=window_size, noverlap=int(overlap * window_size))
+
+    return frequencies, times, 10 * np.log10(Sxx)  # Convert to dB for better visualization
+
+
+# 定义Chirplet函数
+def chirplet(alpha, beta, gamma, t):
+    return np.exp(1j * (alpha * t ** 2 + beta * t + gamma))
+
+
+# 定义PCT计算函数
+def polynomial_chirplet_transform(signal, alpha, beta, gamma):
+    n = len(signal)
+    t = np.arange(n)
+    pct_result = np.zeros(n, dtype=complex)
+
+    for i in range(n):
+        t_shifted = t - t[i]
+        chirplet_function = chirplet(alpha, beta, gamma, t_shifted)
+        pct_result[i] = np.sum(signal * chirplet_function)
+
+    return np.abs(pct_result)  # 提取振幅信息
+
+def cwt(data, sampling_rate, wavename, totalscal=256):
+    """
+    Description:
+        Perform Continuous Wavelet Transform (CWT) on a given signal.
+
+    Parameters:
+        data (numpy.ndarray): Input signal.
+        sampling_rate (float): Sampling rate of the signal.
+        wavename (str): Name of the wavelet function to use.
+        totalscal (int, optional): Length of the scale sequence for wavelet transform (default is 256).
+
+    Returns:
+        cwtmatr (numpy.ndarray): The CWT matrix representing the wavelet transform of the input signal.
+        frequencies (numpy.ndarray): The frequencies corresponding to the CWT matrix rows.
+    """
+
+    fc = pywt.central_frequency(wavename)
+    cparam = 2 * fc * totalscal
+    scales = cparam / np.arange(totalscal, 1, -1)
+
+    cwtmatr, frequencies = pywt.cwt(data, scales, wavename, 1.0 / sampling_rate)
+
+    return cwtmatr, frequencies
+

@@ -24,7 +24,7 @@ def my_fft(signal, fs):
         signal: input signal
         fs: sampling rate
     Returns:
-        The spectrum of the input, containing the freq of x-axis and the mag of the y-axis. The mag is complex.
+        The spectrum of the input, containing the freq of x-axis and the mag of the y-axis. The mag is complex number.
     """
     l = len(signal)
     mag = fft(signal)
@@ -41,7 +41,7 @@ def my_ifft(mag):
     Args:
         mag: Output of my_fft
     Returns:
-        The recovered original signal
+        The recovered original signal. It is complex-valued.
     """
     mag = mag / 2 * len(mag)
     x = ifft(mag)
@@ -1639,10 +1639,49 @@ def hilbert_transform(x):
     Args:
         x: a real-valued singal
     Returns:
-        Return the result of hilbert transformation which is the imaginary part of the analytic signal
+        Return the result of hilbert transformation which is the imaginary part of the analytic signal. It is a
+        real-valued number.
     """
     z = analytic_signal(x)
     return z.imag
+
+
+def inst_amplitude(signal):
+    """
+    Description:
+        Use hilbert transformation to compute the instantaneous amplitude or the envelope of the input signal
+    Args:
+        signal: input signal
+    Returns:
+        The instantaneous amplitude or the envelope of the signal
+    """
+    z = analytic_signal(signal)
+    return np.abs(z)
+
+def inst_phase(signal):
+    """
+    Description:
+        Use hilbert transformation to compute the instantaneous phase of the input signal
+    Args:
+        signal: input signal
+    Returns:
+        instantaneous phase
+    """
+    z = analytic_signal(signal)
+    return np.unwrap(np.angle(z))
+
+def inst_freq(signal, fs):
+    """
+    Description:
+        Use hilbert transformation to compute the instantaneous temporal frequency of the input signal
+    Args:
+        signal: input signal
+        fs: frequency of sampling of input signal
+    Returns:
+        the instantaneous temporal frequency
+    """
+    inst_phase_sig = inst_phase(signal)
+    return np.diff(inst_phase_sig)/(2*np.pi)*fs
 
 def envelope_hilbert(signal, fs):
     """
@@ -1809,6 +1848,21 @@ def tsfel_feature(signal, fs = 100):
     return features
 
 
+def pfd(signal):
+    """
+    Description:
+        It calculates the fractal dimension of a signal to describe its complexity and irregularity. A higher Petrosian
+        Fractal Dimension value indicates a more complex signal.
+    Args:
+        signal: The input signal
+    Returns:
+        The value of pfd
+    """
+    diff = np.diff(signal)
+    n_zero_crossings = np.sum(diff[:-1] * diff[1:] < 0)
+    pfd = np.log10(len(signal)) / (np.log10(len(signal)) + np.log10(len(signal) / (len(signal) + 0.4 * n_zero_crossings)))
+
+    return pfd
 
 def get_wvd(signal, fs, T):
     """

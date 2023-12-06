@@ -1889,27 +1889,55 @@ def get_wvd(signal, fs, T):
 
     return tfr_wvd, t_wvd, f_wvd
 
-def STFT(signal, sample_rate, window_size=512, overlap=0.5, window = "hann"):
+def my_stft(signal, fs, plot=False, window='hann', nperseg=256, noverlap=None, nfft=None, detrend=False, return_onesided=True, boundary='zeros', padded=True, axis=-1, scaling='spectrum'):
+    """
+        Description:
+            Compute the Linear Spectrogram of a signal using Short-time Fourier Transform (STFT).
+
+        Params:
+            signal (numpy.ndarray): The input signal.
+            fs (int): The sample rate of the signal.
+            nperseg (int, optional): The size of the analysis window in samples. Default is 256.
+            The other parameters are seldom used.
+
+        Returns:
+            freqs (numpy.ndarray): The frequency values in Hz.
+            times (numpy.ndarray): The time values in seconds.
+            spectrogram (numpy.ndarray): The computed linear spectrogram.
+        """
+    f,t,Z = scipy.signal.stft(signal, fs, window, nperseg, noverlap, nfft, detrend, return_onesided, boundary, padded, axis, scaling)
+    if plot:
+        plt.pcolormesh(t, f, np.abs(Z))
+        plt.show()
+    return f,t,Z
+
+def mexican_hat_wavelet(sigma, length):
     """
     Description:
-        Compute the Linear Spectrogram of a signal using Short-time Fourier Transform (STFT).
-
-    Params:
-        signal (numpy.ndarray): The input signal.
-        sample_rate (int): The sample rate of the signal.
-        window_size (int, optional): The size of the analysis window in samples. Default is 512.
-        overlap (float, optional): The overlap between successive windows, as a fraction of the window size. Default is 0.5.
-
+        Generate the mexican hat wavelet. It is the second derivative of the Gaussian function.
+    Args:
+        sigma: It has the same meaning in the Gaussian function
+        length: length of the wavelet
     Returns:
-        freqs (numpy.ndarray): The frequency values in Hz.
-        times (numpy.ndarray): The time values in seconds.
-        spectrogram (numpy.ndarray): The computed linear spectrogram.
+        The mexican hat wavelet
     """
+    t = np.linspace(-int(length/2),length/2,length*10)
+    psi = 1/(np.sqrt(2*np.pi)*np.power(sigma,3))*np.exp(-np.power(t,2)/(2*np.power(sigma,2)))*((np.power(t,2)/np.power(sigma,2))-1)
+    return psi
 
-    # Compute the Linear Spectrogram using scipy.signal.spectrogram
-    frequencies, times, Sxx = scipy.signal.spectrogram(signal, fs=sample_rate, window='hann', nperseg=window_size, noverlap=int(overlap * window_size))
-
-    return frequencies, times, 10 * np.log10(Sxx)  # Convert to dB for better visualization
+def morlet_wavelet(length,sigma,a=5):
+    """
+    Description:
+        Generate the morlet wavelet which value is complex.
+    Args:
+        length: Length of the wavelet.
+        sigma: Scaling parameter that affects the width of the window.
+        a: Modulation parameter. Default is 5
+    Returns:
+        The morlet wavelet which is complex-valued.
+    """
+    morlet_wav = scipy.signal.morlet2(length,sigma,a)
+    return morlet_wav
 
 
 # 定义Chirplet函数

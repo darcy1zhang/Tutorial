@@ -89,6 +89,38 @@ def extract_peak_frequency(signal, fs):
     return peak_frequency
 
 
+def my_cwt(signal, scales, wavelet, fs, show=False):
+    """
+    Description:
+        Compute the cwt of the input signal
+    Args:
+        signal: input signal
+        scales: the scales of wavelet, we can use pywt.scale2frequency to convert them to corresponding frequency
+        wavelet: the type of the wavelet, there are "morl", "mexh" and so on. You can use
+            wavlist = pywt.wavelist(kind='continuous') to get the available wavelet
+        fs: the sampling frequency
+        show: whether to show the result
+    Returns:
+        cofficient: the result of cwt. The length of y-axis depends on scales and length of x-axis depends on length of
+            input signal
+        frequencies: the corresponding frequencies to  scales
+    """
+    freq = pywt.scale2frequency(wavelet, scales) * fs
+    if freq[0] > fs / 2:
+        raise ValueError("The intended frequency is too high, please increase the lowest number of scales")
+
+    coefficients, frequencies = pywt.cwt(signal, scales, wavelet, 1 / fs)
+    if show:
+        plt.imshow(np.abs(coefficients), aspect='auto', extent=[0, len(signal) / fs, frequencies[-1], frequencies[0]])
+        plt.colorbar(label='Magnitude')
+        plt.title('Continuous Wavelet Transform')
+        plt.xlabel('Time (seconds)')
+        plt.ylabel('Frequency (Hz)')
+        plt.show()
+
+    return coefficients, frequencies
+
+
 def extract_power_spectral_density(signal, fs):
     """
     Description:

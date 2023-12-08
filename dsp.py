@@ -2161,30 +2161,25 @@ def pfd(signal):
 
     return pfd
 
-def get_wvd(signal, fs, T):
+def my_wvd(signal, show=False):
     """
     Description:
         Analyze the time-frequency characteristics of a signal using the Wigner-Ville Transform (WVT) and visualize the results.
 
     Params:
         signal (numpy.ndarray): The input signal.
-        fs (float): The sampling frequency of the signal.
-        T (float): Time of the signal
-
+        show: whether to plot the result
     Returns:
         tfr_wvd (numpy.ndarray): The time-frequency representation (WVD) of the signal.
         t_wvd (numpy.ndarray): Time values corresponding to the WVD.
         f_wvd (numpy.ndarray): Normalized frequency values corresponding to the WVD.
     """
-
-    t = np.arange(0, T, 1.0 / fs)
-
-    # Doing the WVT
-    wvd = tftb.processing.WignerVilleDistribution(signal, timestamps=t)
+    wvd = tftb.processing.WignerVilleDistribution(signal)
     tfr_wvd, t_wvd, f_wvd = wvd.run()
-
-
+    if show:
+        wvd.plot(kind="contourf", scale="log")
     return tfr_wvd, t_wvd, f_wvd
+
 
 def my_stft(signal, fs, plot=False, window='hann', nperseg=256, noverlap=None, nfft=None, detrend=False, return_onesided=True, boundary='zeros', padded=True, axis=-1, scaling='spectrum'):
     """

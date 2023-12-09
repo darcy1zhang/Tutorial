@@ -1,3 +1,4 @@
+import warnings
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy
@@ -16,6 +17,7 @@ import tftb
 from numba import jit
 from numpy.linalg import norm
 from sklearn.preprocessing import MinMaxScaler
+import chirplet
 
 
 def my_fft(signal, fs):
@@ -1189,8 +1191,8 @@ def _sst_svd(X_test, X_history, n_components):
     """Run sst algorithm with svd."""
     U_test, _, _ = np.linalg.svd(X_test, full_matrices=False)
     U_history, _, _ = np.linalg.svd(X_history, full_matrices=False)
-    _, s, _ = np.linalg.svd(U_test[:, :n_components].T @
-        U_history[:, :n_components], full_matrices=False)
+    _, s, _ = np.linalg.svd(np.ascontiguousarray(U_test[:, :n_components]).T @
+        np.ascontiguousarray(U_history[:, :n_components]), full_matrices=False)
     return 1 - s[0]
 
 
@@ -1309,7 +1311,22 @@ def brown_noise(length_seconds, sampling_rate, plot=False):
 
     return brown_noise
 
-
+def chirplet_transform(signal, show=False):
+    """
+    Description:
+        Generate the chirplet_trainsform of the input signal
+    Args:
+        signal: Input signal
+        show: whether to show the result of the chirplet transform
+    Returns:
+        The result of the chirplet transform
+    """
+    chirps = chirplet.FCT()
+    ct_matrix = chirps.compute(signal)
+    if show:
+        plt.title("chirplet transform")
+        plt.imshow(ct_matrix, aspect="auto")
+    return ct_matrix
 
 def impulsive_noise(length_seconds, sampling_rate, probability, plot=False):
     r"""
@@ -2232,23 +2249,23 @@ def morlet_wavelet(length,sigma,a=5):
     return morlet_wav
 
 
-# 定义Chirplet函数
-def chirplet(alpha, beta, gamma, t):
-    return np.exp(1j * (alpha * t ** 2 + beta * t + gamma))
-
-
-# 定义PCT计算函数
-def polynomial_chirplet_transform(signal, alpha, beta, gamma):
-    n = len(signal)
-    t = np.arange(n)
-    pct_result = np.zeros(n, dtype=complex)
-
-    for i in range(n):
-        t_shifted = t - t[i]
-        chirplet_function = chirplet(alpha, beta, gamma, t_shifted)
-        pct_result[i] = np.sum(signal * chirplet_function)
-
-    return np.abs(pct_result)  # 提取振幅信息
+# # 定义Chirplet函数
+# def chirplet(alpha, beta, gamma, t):
+#     return np.exp(1j * (alpha * t ** 2 + beta * t + gamma))
+#
+#
+# # 定义PCT计算函数
+# def polynomial_chirplet_transform(signal, alpha, beta, gamma):
+#     n = len(signal)
+#     t = np.arange(n)
+#     pct_result = np.zeros(n, dtype=complex)
+#
+#     for i in range(n):
+#         t_shifted = t - t[i]
+#         chirplet_function = chirplet(alpha, beta, gamma, t_shifted)
+#         pct_result[i] = np.sum(signal * chirplet_function)
+#
+#     return np.abs(pct_result)  # 提取振幅信息
 
 def cwt(data, sampling_rate, wavename, totalscal=256):
     """

@@ -297,7 +297,7 @@ def fft_based(input_signal, filter_coefficients, boundary=0):
         return newx[num_coeffs-1:-1]
 
     elif boundary == 1:#symmetric
-        input_signal = concatenate([flipud(input_signal[:half_size]), input_signal, flipud(input_signal[half_size:])])
+        input_signal = np.concatenate([flipud(input_signal[:half_size]), input_signal, flipud(input_signal[half_size:])])
         filter_coefficients = np.lib.pad(filter_coefficients, (0, input_signal.size-num_coeffs), 'constant', constant_values=0)
         newx = ifft(fft(input_signal)*fft(filter_coefficients))
         return newx[num_coeffs-1:-1]
@@ -349,7 +349,7 @@ def build_fft(input_signal, filter_coefficients, threshold_windows=6, boundary=0
         x_fft = fft(zeropaddedwindow)
 
     elif boundary == 1:#SYMMETRIC
-        window = concatenate([flipud(input_signal[:half_size]), input_signal[current_pos:current_pos+windows_size-half_size]])
+        window = np.concatenate([flipud(input_signal[:half_size]), input_signal[current_pos:current_pos+windows_size-half_size]])
         x_fft = fft(window)
 
     else:

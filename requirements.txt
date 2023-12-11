@@ -8,3 +8,6 @@ PyWavelets==1.4.1
 tftb==0.1.4
 seaborn==0.12.2
 tqdm==4.65.0
+scikit-learn==1.2.1
+ssqueezepy==0.6.4
+numba==0.56.4

@@ -11,6 +11,6 @@
 |                           | Scalogram: Continuous Wavelet Transformation (CWT) (linear)   |    ✔     |
 |                           | Polynomial Chirplet Transform (PCT)   |    ✔     |
 |                           | Wigner-Ville distribution (WVD) (bilinear)   |    ✔     |
-|                           | Symplectic Finite Fourier transform (SFFT)   |    ✔     |
+|                           | Symplectic Finite Fourier transform (SFFT)   |          |
 |                           | SynchroSqueezing Transform (SST) |    ✔     |
 

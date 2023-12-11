@@ -18,6 +18,7 @@ from numba import jit
 from numpy.linalg import norm
 from sklearn.preprocessing import MinMaxScaler
 import chirplet
+import ssqueezepy as sq
 
 
 def my_fft(signal, fs):
@@ -121,6 +122,44 @@ def my_cwt(signal, scales, wavelet, fs, show=False):
         plt.show()
 
     return coefficients, frequencies
+
+def sst_cwt(signal, wavelet, scales, nv, fs, gamma=None, show=False):
+    """
+    Description:
+        Synchrosqueezed Continuous Wavelet Transform
+    Args:
+        signal: input of signal
+        wavelet: the type of mother wavelet
+        scales: how to scale the output, log or linear
+        nv: number of voices
+        fs: sampling frequency
+        gamma: CWT phase threshold
+        show: whether to show the result
+    Returns:
+        Tx: Synchrosqueezed CWT of `x`. (rows=~frequencies, cols=timeshifts)
+            (nf = len(ssq_freqs); n = len(x))
+            `nf = na` by default, where `na = len(scales)`.
+        Wx: Continuous Wavelet Transform of `x`, L1-normed (see `cwt`).
+        ssq_freqs: Frequencies associated with rows of `Tx`.
+        scales: Scales associated with rows of `Wx`.
+    """
+    Tx, Wx, ssq_freqs, scales= sq.ssq_cwt(x=signal, wavelet=wavelet, scales=scales, nv=nv, fs = fs,gamma = gamma)
+    if show:
+        plt.subplot(2,1,1)
+        plt.imshow(np.abs(Wx), aspect='auto', extent=[0, len(signal) / fs, ssq_freqs[-1], ssq_freqs[0]])
+        plt.colorbar(label='Magnitude')
+        plt.title('Continuous Wavelet Transform')
+        plt.xlabel('Time (seconds)')
+        plt.ylabel('Frequency (Hz)')
+        plt.subplot(2,1,2)
+        plt.imshow(np.abs(Tx), aspect='auto', extent=[0, len(signal) / fs, ssq_freqs[-1], ssq_freqs[0]])
+        plt.colorbar(label='Magnitude')
+        plt.title('Synchrosqueezed Continuous Wavelet Transform')
+        plt.xlabel('Time (seconds)')
+        plt.ylabel('Frequency (Hz)')
+        plt.tight_layout()
+        plt.show()
+    return Tx, Wx, ssq_freqs, scales
 
 
 def extract_power_spectral_density(signal, fs):
@@ -2219,6 +2258,36 @@ def my_stft(signal, fs, plot=False, window='hann', nperseg=256, noverlap=None, n
         plt.pcolormesh(t, f, np.abs(Z))
         plt.show()
     return f,t,Z
+
+def sst_stft(signal, fs, window, nperseg=256, show=False, n_fft=None, hop_len=1, modulated=True, ssq_freqs=None, padtype='reflect', squeezing='sum', gamma=None, preserve_transform=None, dtype=None, astensor=True, flipud=False, get_w=False, get_dWx=False):
+    """
+    Description:
+        Synchrosqueezed Short-Time Fourier Transform.
+    Args:
+        signal: the input signal
+        fs: frequency of sampling
+        window: type of the window
+        nperseg: Length of each segment
+        show: whether to show the result
+        n_fft: length of fft
+        The other parameters are seldom used.
+    Returns:
+        Tx: Synchrosqueezed STFT of `x`, of same shape as `Sx`.
+        Sx: STFT of `x`
+        ssq_freqs: Frequencies associated with rows of `Tx`.
+        Sfs: Frequencies associated with rows of `Sx` (by default == `ssq_freqs`).
+    """
+    Tx, Sx, ssq_freqs, Sfs= sq.ssq_stft(signal, window=window, win_len = nperseg, fs = fs, n_fft=n_fft)
+    if show:
+        plt.subplot(2,1,1)
+        plt.title("STFT of Input signal")
+        plt.imshow(np.abs(Sx),aspect="auto")
+        plt.subplot(2,1,2)
+        plt.title("Synchrosqueezed STFT of Input signal")
+        plt.imshow(np.abs(Tx),aspect="auto")
+        plt.tight_layout()
+        plt.show()
+    return Tx, Sx, ssq_freqs, Sfs
 
 def mexican_hat_wavelet(sigma, length):
     """

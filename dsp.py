@@ -6,7 +6,7 @@ import scipy.signal
 from scipy.signal import butter, lfilter, hilbert, chirp, welch, find_peaks
 from scipy.stats import entropy, kurtosis, skew
 from scipy.interpolate import interp1d
-from scipy.fft import fft,ifft
+from scipy.fft import fft, ifft
 from numpy.fft import fft, ifft, fftfreq
 import os
 import json
@@ -14,15 +14,221 @@ import tsfel
 from sklearn.metrics import mean_squared_error
 import pywt
 import tftb
-from numba import jit
-from numpy.linalg import norm
-from sklearn.preprocessing import MinMaxScaler
 # import chirplet
 import ssqueezepy as sq
 from pylab import (arange, flipud, linspace, cos, pi, log, hanning,
                    ceil, log2, floor, empty_like, fft, ifft, fabs, exp, roll, convolve)
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    from fastsst import SingularSpectrumTransformation
 
 
+
+# Time Domain
+## Analytic Signal and Hilbert Transform
+def analytic_signal(x):
+    """
+    Description:
+        Get the analytic version of the input signal
+    Args:
+        x: input signal which is a real-valued signal
+    Returns:
+        The analytic version of the input signal which is a complex-valued signal
+    """
+    N = len(x)
+    X = fft(x, N)
+    h = np.zeros(N)
+    h[0] = 1
+    h[1:N // 2] = 2 * np.ones(N // 2 - 1)
+    h[N // 2] = 1
+    Z = X * h
+    z = ifft(Z, N)
+    return z
+
+def hilbert_transform(x):
+    """
+    Description:
+        Get the hilbert transformation of the input signal
+    Args:
+        x: a real-valued singal
+    Returns:
+        Return the result of hilbert transformation which is the imaginary part of the analytic signal. It is a
+        real-valued number.
+    """
+    z = analytic_signal(x)
+    return z.imag
+
+## Peak Detection
+### Peak of Peak Algorithm
+def get_peaks(signal):
+    """
+    Description:
+        Detect peaks in a signal and perform linear interpolation to obtain an envelope.
+
+    Params:
+        signal (numpy.ndarray): The input signal.
+
+    Returns:
+        peaks (numpy.ndarray): An array containing the indices of the detected peaks.
+    """
+    t = np.arange(len(signal))
+    peak_indices, _ = find_peaks(signal) # find all peaks in th signal
+
+    # interpolate the peaks to form the envelope
+    t_peaks = t[peak_indices]
+    peak_values = signal[peak_indices]
+    interpolation_func = interp1d(t_peaks, peak_values, kind='linear', bounds_error=False, fill_value=0)
+    envelope = interpolation_func(t)
+
+    peaks2, _ = find_peaks(envelope, distance=10) # find the peaks of envelope
+    peaks2 = update_array(peaks2, signal) # remove wrong peaks
+
+    # make sure the first peak is the higher peak
+    if len(peaks2) > 1:
+        if (signal[peaks2[1]] > signal[peaks2[0]]):
+            peaks2 = np.delete(peaks2, 0)
+
+    # make sure the number of peaks is even
+    if len(peaks2) % 2 != 0:
+        peaks2 = np.delete(peaks2, len(peaks2) - 1)
+
+    return peaks2
+
+def update_array(a, data_tmp):
+    """
+    Description:
+        Update an array 'a' by removing elements based on the pattern in 'data_tmp'.
+
+    Params:
+        a (numpy.ndarray): The input array to be updated.
+        data_tmp (numpy.ndarray): The data array used for comparison.
+
+    Returns:
+        updated_array (numpy.ndarray): The updated array after removing elements.
+    """
+    i = 0
+    while i < len(a) - 2:
+        if data_tmp[a[i]] < data_tmp[a[i + 1]] < data_tmp[a[i + 2]]:
+            a = np.delete(a, i)
+        elif data_tmp[a[i]] > data_tmp[a[i + 1]] > data_tmp[a[i + 2]]:
+            a = np.delete(a, i + 2)
+        else:
+            i += 1
+    return a
+
+## Envelope Extraction
+### Envelope from Peaks
+def envelope_from_peaks(signal):
+    """
+    Description
+        Interpolation the peaks to get the envelope of the input signal. The algorithm is only suitable for the signal
+        with a lot of noise
+    Args:
+        signal: The input signal
+    Returns:
+        envelope: The envelope of the input signal
+    """
+    t = np.arange(len(signal))
+    peak_indices, _ = find_peaks(signal)
+
+    # interpolate the peaks to form the envelope
+    t_peaks = t[peak_indices]
+    peak_values = signal[peak_indices]
+    interpolation_func = interp1d(t_peaks, peak_values, kind='linear', bounds_error=False, fill_value=0)
+    envelope = interpolation_func(t)
+
+    return envelope
+
+### Average Envelope
+def average_envelope(signal, window_length):
+    """
+    Description:
+        Use the average window to get the envelope
+    Args:
+        signal: input signal
+        window_length: the length of the average window
+    Returns:
+        envelope: the envelope of the input signal
+    """
+    weights = np.ones(window_length) / window_length
+    envelope = np.convolve(np.abs(signal), weights, mode='valid')
+    padding = (window_length - 1) // 2
+    envelope = np.concatenate([np.zeros(padding), envelope, np.zeros(padding)])
+    return envelope
+
+### Envelope and Phase Extraction using Hilbert Transform
+def inst_amplitude(signal):
+    """
+    Description:
+        Use hilbert transformation to compute the instantaneous amplitude or the envelope of the input signal
+    Args:
+        signal: input signal
+    Returns:
+        The instantaneous amplitude or the envelope of the signal
+    """
+    z = analytic_signal(signal)
+    return np.abs(z)
+
+def inst_phase(signal):
+    """
+    Description:
+        Use hilbert transformation to compute the instantaneous phase of the input signal
+    Args:
+        signal: input signal
+    Returns:
+        instantaneous phase
+    """
+    z = analytic_signal(signal)
+    return np.unwrap(np.angle(z))
+
+def inst_freq(signal, fs):
+    """
+    Description:
+        Use hilbert transformation to compute the instantaneous temporal frequency of the input signal
+    Args:
+        signal: input signal
+        fs: frequency of sampling of input signal
+    Returns:
+        the instantaneous temporal frequency
+    """
+    inst_phase_sig = inst_phase(signal)
+    return np.diff(inst_phase_sig) / (2 * np.pi) * fs
+
+## Singular Spectrum Transform (SST)
+def sst(signal, win_length):
+    """
+    Description:
+        It is a change point detection algorithm
+    Args:
+        signal: the input signal
+        win_length: window length of Hankel matrix
+    Returns:
+        score: an array measuring the degree of change
+    """
+    sst = SingularSpectrumTransformation(win_length=win_length)
+    score = sst.score_offline(signal)
+    return score
+
+## Time Domain Feature
+### Petrosian Fractal Dimension (PFD)
+def pfd(signal):
+    """
+    Description:
+        It calculates the fractal dimension of a signal to describe its complexity and irregularity. A higher Petrosian
+        Fractal Dimension value indicates a more complex signal.
+    Args:
+        signal: The input signal
+    Returns:
+        The value of pfd
+    """
+    diff = np.diff(signal)
+    n_zero_crossings = np.sum(diff[:-1] * diff[1:] < 0)
+    pfd = np.log10(len(signal)) / (
+                np.log10(len(signal)) + np.log10(len(signal) / (len(signal) + 0.4 * n_zero_crossings)))
+    return pfd
+
+# Frequency Domain
+## Fast Fourier Transform (FFT)
 def my_fft(signal, fs):
     """
     Description:
@@ -37,9 +243,7 @@ def my_fft(signal, fs):
     mag = fft(signal)
     freq = fftfreq(l, 1 / fs)
     mag = mag / l * 2
-
     return freq, mag
-
 
 def my_ifft(mag):
     """
@@ -52,47 +256,83 @@ def my_ifft(mag):
     """
     mag = mag / 2 * len(mag)
     x = ifft(mag)
-
     return x
 
-
-
-def extract_spectral_power(signal, fs, frequency_band):
+## Frequency Domain Feature
+### Power Spectral Density (PSD)
+def psd(signal, fs):
     """
     Description:
-        Extract the spectral power of a signal within a specified frequency band.
-
+        Extract the power spectral density (PSD) of a signal.
     Params:
         signal (numpy.ndarray): Input signal.
         fs (float): Sampling frequency of the signal.
-        frequency_band (tuple): Frequency band of interest (lowcut, highcut) in Hz.
-
     Returns:
-        float: Spectral power within the specified frequency band.
+        numpy.ndarray: Frequency vector.
+        numpy.ndarray: Power spectral density values.
     """
-
     f, Pxx = welch(signal, fs=fs)
-    mask = (f >= frequency_band[0]) & (f <= frequency_band[1])
-    spectral_power = np.sum(Pxx[mask])
-    return spectral_power
+    return f, Pxx
 
-def extract_peak_frequency(signal, fs):
+# Time-Frequency Domain
+## Short Time Fourier Transform (STFT)
+def my_stft(signal, fs, plot=False, window='hann', nperseg=256, noverlap=None, nfft=None, detrend=False,
+            return_onesided=True, boundary='zeros', padded=True, axis=-1, scaling='spectrum'):
     """
     Description:
-        Extract the frequency with the highest spectral amplitude (peak frequency).
+        Compute the Linear Spectrogram of a signal using Short-time Fourier Transform (STFT).
 
     Params:
-        signal (numpy.ndarray): Input signal.
-        fs (float): Sampling frequency of the signal.
+        signal (numpy.ndarray): The input signal.
+        fs (int): The sample rate of the signal.
+        nperseg (int, optional): The size of the analysis window in samples. Default is 256.
+        The other parameters are seldom used.
 
     Returns:
-        float: Frequency with the highest spectral amplitude (peak frequency).
+        freqs (numpy.ndarray): The frequency values in Hz.
+        times (numpy.ndarray): The time values in seconds.
+        spectrogram (numpy.ndarray): The computed linear spectrogram.
     """
+    f, t, Z = scipy.signal.stft(signal, fs, window, nperseg, noverlap, nfft, detrend, return_onesided, boundary, padded,
+                                axis, scaling)
+    if plot:
+        plt.pcolormesh(t, f, np.abs(Z))
+        plt.show()
+    return f, t, Z
 
-    f, Pxx = welch(signal, fs=fs)
-    peak_frequency = f[np.argmax(Pxx)]
-    return peak_frequency
+## Wavelet Analysis
+### Mexican Hat Wavelet
+def mexican_hat_wavelet(sigma, length):
+    """
+    Description:
+        Generate the mexican hat wavelet. It is the second derivative of the Gaussian function.
+    Args:
+        sigma: It has the same meaning in the Gaussian function
+        length: length of the wavelet
+    Returns:
+        The mexican hat wavelet
+    """
+    t = np.linspace(-int(length / 2), length / 2, length * 10)
+    psi = 1 / (np.sqrt(2 * np.pi) * np.power(sigma, 3)) * np.exp(-np.power(t, 2) / (2 * np.power(sigma, 2))) * (
+                (np.power(t, 2) / np.power(sigma, 2)) - 1)
+    return psi
 
+### Morlet Wavelet
+def morlet_wavelet(length, sigma, a=5):
+    """
+    Description:
+        Generate the morlet wavelet which value is complex.
+    Args:
+        length: Length of the wavelet.
+        sigma: Scaling parameter that affects the width of the window.
+        a: Modulation parameter. Default is 5
+    Returns:
+        The morlet wavelet which is complex-valued.
+    """
+    morlet_wav = scipy.signal.morlet2(length, sigma, a)
+    return morlet_wav
+
+### Continues Wavelet Transform (CWT)
 
 def my_cwt(signal, scales, wavelet, fs, show=False):
     """
@@ -113,7 +353,6 @@ def my_cwt(signal, scales, wavelet, fs, show=False):
     freq = pywt.scale2frequency(wavelet, scales) * fs
     if freq[0] > fs / 2:
         raise ValueError("The intended frequency is too high, please increase the lowest number of scales")
-
     coefficients, frequencies = pywt.cwt(signal, scales, wavelet, 1 / fs)
     if show:
         plt.imshow(np.abs(coefficients), aspect='auto', extent=[0, len(signal) / fs, frequencies[-1], frequencies[0]])
@@ -122,8 +361,79 @@ def my_cwt(signal, scales, wavelet, fs, show=False):
         plt.xlabel('Time (seconds)')
         plt.ylabel('Frequency (Hz)')
         plt.show()
-
     return coefficients, frequencies
+
+## Polynomial Chirplet Transform (PCT)
+### Chirplet Transform
+def chirplet_transform(signal, show=False):
+    """
+    Description:
+        Generate the chirplet_trainsform of the input signal
+    Args:
+        signal: Input signal
+        show: whether to show the result of the chirplet transform
+    Returns:
+        The result of the chirplet transform
+    """
+    chirps = FCT()
+    ct_matrix = chirps.compute(signal)
+    if show:
+        plt.title("chirplet transform")
+        plt.imshow(ct_matrix, aspect="auto")
+    return ct_matrix
+
+## Wigner Ville Distribution (WVD)
+def my_wvd(signal, show=False):
+    """
+    Description:
+        Analyze the time-frequency characteristics of a signal using the Wigner-Ville Transform (WVT) and visualize the results.
+
+    Params:
+        signal (numpy.ndarray): The input signal.
+        show: whether to plot the result
+    Returns:
+        tfr_wvd (numpy.ndarray): The time-frequency representation (WVD) of the signal.
+        t_wvd (numpy.ndarray): Time values corresponding to the WVD.
+        f_wvd (numpy.ndarray): Normalized frequency values corresponding to the WVD.
+    """
+    wvd = tftb.processing.WignerVilleDistribution(signal)
+    tfr_wvd, t_wvd, f_wvd = wvd.run()
+    if show:
+        wvd.plot(kind="contourf", scale="log")
+    return tfr_wvd, t_wvd, f_wvd
+
+## SynchroSqueezing Transform (SST)
+def sst_stft(signal, fs, window, nperseg=256, show=False, n_fft=None, hop_len=1, modulated=True, ssq_freqs=None,
+             padtype='reflect', squeezing='sum', gamma=None, preserve_transform=None, dtype=None, astensor=True,
+             flipud=False, get_w=False, get_dWx=False):
+    """
+    Description:
+        Synchrosqueezed Short-Time Fourier Transform.
+    Args:
+        signal: the input signal
+        fs: frequency of sampling
+        window: type of the window
+        nperseg: Length of each segment
+        show: whether to show the result
+        n_fft: length of fft
+        The other parameters are seldom used.
+    Returns:
+        Tx: Synchrosqueezed STFT of `x`, of same shape as `Sx`.
+        Sx: STFT of `x`
+        ssq_freqs: Frequencies associated with rows of `Tx`.
+        Sfs: Frequencies associated with rows of `Sx` (by default == `ssq_freqs`).
+    """
+    Tx, Sx, ssq_freqs, Sfs = sq.ssq_stft(signal, window=window, win_len=nperseg, fs=fs, n_fft=n_fft)
+    if show:
+        plt.subplot(2, 1, 1)
+        plt.title("STFT of Input signal")
+        plt.imshow(np.abs(Sx), aspect="auto")
+        plt.subplot(2, 1, 2)
+        plt.title("Synchrosqueezed STFT of Input signal")
+        plt.imshow(np.abs(Tx), aspect="auto")
+        plt.tight_layout()
+        plt.show()
+    return Tx, Sx, ssq_freqs, Sfs
 
 def sst_cwt(signal, wavelet, scales, nv, fs, gamma=None, show=False):
     """
@@ -145,15 +455,15 @@ def sst_cwt(signal, wavelet, scales, nv, fs, gamma=None, show=False):
         ssq_freqs: Frequencies associated with rows of `Tx`.
         scales: Scales associated with rows of `Wx`.
     """
-    Tx, Wx, ssq_freqs, scales= sq.ssq_cwt(x=signal, wavelet=wavelet, scales=scales, nv=nv, fs = fs,gamma = gamma)
+    Tx, Wx, ssq_freqs, scales = sq.ssq_cwt(x=signal, wavelet=wavelet, scales=scales, nv=nv, fs=fs, gamma=gamma)
     if show:
-        plt.subplot(2,1,1)
+        plt.subplot(2, 1, 1)
         plt.imshow(np.abs(Wx), aspect='auto', extent=[0, len(signal) / fs, ssq_freqs[-1], ssq_freqs[0]])
         plt.colorbar(label='Magnitude')
         plt.title('Continuous Wavelet Transform')
         plt.xlabel('Time (seconds)')
         plt.ylabel('Frequency (Hz)')
-        plt.subplot(2,1,2)
+        plt.subplot(2, 1, 2)
         plt.imshow(np.abs(Tx), aspect='auto', extent=[0, len(signal) / fs, ssq_freqs[-1], ssq_freqs[0]])
         plt.colorbar(label='Magnitude')
         plt.title('Synchrosqueezed Continuous Wavelet Transform')
@@ -164,22 +474,57 @@ def sst_cwt(signal, wavelet, scales, nv, fs, gamma=None, show=False):
     return Tx, Wx, ssq_freqs, scales
 
 
-def extract_power_spectral_density(signal, fs):
+
+
+
+
+
+
+
+
+
+def extract_spectral_power(signal, fs, frequency_band):
     """
     Description:
-        Extract the power spectral density (PSD) of a signal.
+        Extract the spectral power of a signal within a specified frequency band.
+
+    Params:
+        signal (numpy.ndarray): Input signal.
+        fs (float): Sampling frequency of the signal.
+        frequency_band (tuple): Frequency band of interest (lowcut, highcut) in Hz.
+
+    Returns:
+        float: Spectral power within the specified frequency band.
+    """
+
+    f, Pxx = welch(signal, fs=fs)
+    mask = (f >= frequency_band[0]) & (f <= frequency_band[1])
+    spectral_power = np.sum(Pxx[mask])
+    return spectral_power
+
+
+def extract_peak_frequency(signal, fs):
+    """
+    Description:
+        Extract the frequency with the highest spectral amplitude (peak frequency).
 
     Params:
         signal (numpy.ndarray): Input signal.
         fs (float): Sampling frequency of the signal.
 
     Returns:
-        numpy.ndarray: Frequency vector.
-        numpy.ndarray: Power spectral density values.
+        float: Frequency with the highest spectral amplitude (peak frequency).
     """
 
     f, Pxx = welch(signal, fs=fs)
-    return f, Pxx
+    peak_frequency = f[np.argmax(Pxx)]
+    return peak_frequency
+
+
+
+
+
+
 
 def extract_spectral_entropy(signal, fs, num_segments=10):
     """
@@ -226,6 +571,7 @@ def extract_spectral_kurtosis(signal, fs):
     spectral_kurtosis = kurtosis(Pxx)
     return spectral_kurtosis
 
+
 def extract_spectral_skewness(signal, fs):
     """
     Description:
@@ -243,6 +589,7 @@ def extract_spectral_skewness(signal, fs):
     spectral_skewness = skew(Pxx)
     return spectral_skewness
 
+
 def extract_mean_spectral_energy(signal, fs):
     """
     Description:
@@ -259,6 +606,7 @@ def extract_mean_spectral_energy(signal, fs):
     f, Pxx = welch(signal, fs=fs)
     mean_spectral_energy = np.mean(Pxx)
     return mean_spectral_energy
+
 
 def extract_spectral_power(signal, fs, frequency_band):
     """
@@ -278,6 +626,7 @@ def extract_spectral_power(signal, fs, frequency_band):
     mask = (f >= frequency_band[0]) & (f <= frequency_band[1])
     spectral_power = np.sum(Pxx[mask])
     return spectral_power
+
 
 def extract_peak_frequency(signal, fs):
     """
@@ -314,6 +663,7 @@ def extract_power_spectral_density(signal, fs):
     f, Pxx = welch(signal, fs=fs)
     return f, Pxx
 
+
 def extract_spectral_entropy(signal, fs, num_segments=10):
     """
     Description:
@@ -359,6 +709,7 @@ def extract_spectral_kurtosis(signal, fs):
     spectral_kurtosis = kurtosis(Pxx)
     return spectral_kurtosis
 
+
 def extract_spectral_skewness(signal, fs):
     """
     Description:
@@ -375,6 +726,7 @@ def extract_spectral_skewness(signal, fs):
     f, Pxx = welch(signal, fs=fs)
     spectral_skewness = skew(Pxx)
     return spectral_skewness
+
 
 def extract_mean_spectral_energy(signal, fs):
     """
@@ -412,6 +764,7 @@ def DCT_synthesize(amps, fs, ts):
     ys = np.dot(M, amps)
     return ys
 
+
 def DCT_analyze(ys, fs, ts):
     """
     Description:
@@ -429,6 +782,7 @@ def DCT_analyze(ys, fs, ts):
     M = np.cos(np.pi * 2 * args)
     amps = np.dot(M, ys) / 2
     return amps
+
 
 def DCT_iv(ys):
     """
@@ -454,7 +808,6 @@ def inverse_DCT_iv(amps):
     return DCT_iv(amps) * 2
 
 
-
 def butter_bandpass(lowcut, highcut, fs, order=5):
     """
     Description:
@@ -477,6 +830,7 @@ def butter_bandpass(lowcut, highcut, fs, order=5):
     b, a = butter(order, [low, high], btype='band')
     return b, a
 
+
 def butter_lowpass(cutoff, fs, order=5):
     """
     Description:
@@ -497,6 +851,7 @@ def butter_lowpass(cutoff, fs, order=5):
     b, a = butter(order, normal_cutoff, btype='low', analog=False)
     return b, a
 
+
 def butter_highpass(cutoff, fs, order=5):
     """
     Description:
@@ -516,6 +871,7 @@ def butter_highpass(cutoff, fs, order=5):
     b, a = butter(order, normal_cutoff, btype='high', analog=False)
     return b, a
 
+
 def butter_filter(data, b, a):
     """
     Description:
@@ -531,7 +887,6 @@ def butter_filter(data, b, a):
     """
     y = lfilter(b, a, data)
     return y
-
 
 
 def sine_wave(length_seconds, sampling_rate, frequencies, func="sin", add_noise=0, plot=False):
@@ -621,6 +976,7 @@ def sine_wave(length_seconds, sampling_rate, frequencies, func="sin", add_noise=
 
     return signal
 
+
 def triangle_wave(t, width=1):
     """
     Return a periodic sawtooth or triangle waveform.
@@ -691,6 +1047,7 @@ def triangle_wave(t, width=1):
     wsub = np.extract(mask3, w)
     np.place(y, mask3, (np.pi * (wsub + 1) - tsub) / (np.pi * (1 - wsub)))
     return y
+
 
 def square_wave(t, duty=0.5):
     """
@@ -1012,231 +1369,6 @@ def white_noise(length_seconds, sampling_rate, plot=False):
     return white_noise
 
 
-# Due to the failure to pip install fastsst, I decided to copy the function which will be used later.
-@jit(nopython=True)
-def power_method(A, x0, n_iter=1):
-    """Compute the first singular components by power method."""
-    for i in range(n_iter):
-        x0 = A.T @ A @ x0
-
-    v = x0 / norm(x0)
-    s = norm(A @ v)
-    u = A @ v / s
-
-    return u, s, v
-
-
-@jit(nopython=True)
-def lanczos(C, a, s):
-    """Perform lanczos algorithm."""
-    # initialization
-    r = np.copy(a)
-    a_pre = np.zeros_like(a, dtype=np.float64)
-    beta_pre = 1
-    T = np.zeros((s, s))
-
-    for j in range(s):
-        a_post = r / beta_pre
-        alpha = a_post.T @ C @ a_post
-        r = C @ a_post - alpha*a_post - beta_pre*a_pre
-        beta_post = norm(r)
-
-        T[j, j] = alpha
-        if j - 1 >= 0:
-            T[j, j-1] = beta_pre
-            T[j-1, j] = beta_pre
-
-        # update
-        a_pre = a_post
-        beta_pre = beta_post
-
-    return T
-
-
-@jit(nopython=True)
-def eig_tridiag(T):
-    """Compute eigen value decomposition for tridiag matrix."""
-    # TODO: efficient implementation
-    # ------------------------------------------------------
-    # Is it really necessary to implement fast eig computation ?
-    # The size of matrix T is practically at most 20 since almost 2 times
-    # larger than n_components. Therefore fast implementation such as
-    # QL algorithm may not provide computational cost benefit in total.
-    # ------------------------------------------------------
-    u, s, _ = np.linalg.svd(T)
-    # NOTE: return value must be ordered
-    return u, s
-
-
-class SingularSpectrumTransformation():
-    """SingularSpectrumTransformation class."""
-
-    def __init__(self, win_length, n_components=5, order=None, lag=None,
-                 is_scaled=False, use_lanczos=True, rank_lanczos=None, eps=1e-3):
-        """Change point detection with Singular Spectrum Transformation.
-
-        Parameters
-        ----------
-        win_length : int
-            window length of Hankel matrix.
-        n_components : int
-            specify how many rank of Hankel matrix will be taken.
-        order : int
-            number of columns of Hankel matrix.
-        lag : int
-            interval between history Hankel matrix and test Hankel matrix.
-        is_scaled : bool
-            if false, min-max scaling will be applied(recommended).
-        use_lanczos : boolean
-            if true, Lanczos method will be used, which makes faster.
-        rank_lanczos : int
-            the rank which will be used for lanczos method.
-            for the detail of lanczos method, see [1].
-        eps : float
-            specify how much noise will be added to initial vector for
-            power method.
-            (FELIX: FEedback impLIcit kernel approXimation method)
-            for the detail, see [2].
-        """
-        self.win_length = win_length
-        self.n_components = n_components
-        self.order = order
-        self.lag = lag
-        self.is_scaled = is_scaled
-        self.use_lanczos = use_lanczos
-        self.rank_lanczos = rank_lanczos
-        self.eps = eps
-
-    def score_offline(self, x):
-        """Calculate anomaly score (offline).
-
-        Parameters
-        ----------
-        x : 1d numpy array
-            input time series data.
-
-        Returns
-        -------
-        score : 1d array
-            change point score.
-
-        """
-        if self.order is None:
-            # rule of thumb
-            self.order = self.win_length
-        if self.lag is None:
-            # rule of thumb
-            self.lag = self.order // 2
-        if self.rank_lanczos is None:
-            # rule of thumb
-            if self.n_components % 2 == 0:
-                self.rank_lanczos = 2 * self.n_components
-            else:
-                self.rank_lanczos = 2 * self.n_components - 1
-
-        assert isinstance(x, np.ndarray), "input array must be numpy array."
-        assert x.ndim == 1, "input array dimension must be 1."
-        assert isinstance(self.win_length, int), "window length must be int."
-        assert isinstance(self.n_components, int), "number of components must be int."
-        assert isinstance(self.order, int), "order of partial time series must be int."
-        assert isinstance(self.lag, int), "lag between test series and history series must be int."
-        assert isinstance(self.rank_lanczos, int), "rank for lanczos must be int."
-        assert self.win_length + self.order + self.lag < x.size, "data length is too short."
-
-        # all values should be positive for numerical stabilization
-        if not self.is_scaled:
-            x_scaled = MinMaxScaler(feature_range=(1, 2))\
-                .fit_transform(x.reshape(-1, 1))[:, 0]
-        else:
-            x_scaled = x
-
-        score = _score_offline(x_scaled, self.order,
-            self.win_length, self.lag, self.n_components, self.rank_lanczos,
-            self.eps, use_lanczos=self.use_lanczos)
-
-        return score
-
-
-@jit(nopython=True)
-def _score_offline(x, order, win_length, lag, n_components, rank, eps, use_lanczos):
-    """Core implementation of offline score calculation."""
-    start_idx = win_length + order + lag + 1
-    end_idx = x.size + 1
-
-    # initialize vector for power method
-    x0 = np.empty(order, dtype=np.float64)
-    x0 = np.random.rand(order)
-    x0 /= np.linalg.norm(x0)
-
-    score = np.zeros_like(x)
-    for t in range(start_idx, end_idx):
-        # compute score at each index
-
-        # get Hankel matrix
-        X_history = _create_hankel(x, order,
-            start=t - win_length - lag,
-            end=t - lag)
-        X_test = _create_hankel(x, order,
-            start=t - win_length,
-            end=t)
-
-        if use_lanczos:
-            score[t-1], x1 = _sst_lanczos(X_test, X_history, n_components,
-                                          rank, x0)
-            # update initial vector for power method
-            x0 = x1 + eps * np.random.rand(x0.size)
-            x0 /= np.linalg.norm(x0)
-        else:
-            score[t-1] = _sst_svd(X_test, X_history, n_components)
-
-    return score
-
-
-@jit(nopython=True)
-def _create_hankel(x, order, start, end):
-    """Create Hankel matrix.
-
-    Parameters
-    ----------
-    x : full time series
-    order : order of Hankel matrix
-    start : start index
-    end : end index
-
-    Returns
-    -------
-    2d array shape (window length, order)
-
-    """
-    win_length = end - start
-    X = np.empty((win_length, order))
-    for i in range(order):
-        X[:, i] = x[(start - i):(end - i)]
-    return X
-
-
-@jit(nopython=True)
-def _sst_lanczos(X_test, X_history, n_components, rank, x0):
-    """Run sst algorithm with lanczos method (FELIX-SST algorithm)."""
-    P_history = X_history.T @ X_history
-    P_test = X_test.T @ X_test
-    # calculate the first singular vec of test matrix
-    u, _, _ = power_method(P_test, x0, n_iter=1)
-    T = lanczos(P_history, u, rank)
-    vec, val = eig_tridiag(T)
-    return 1 - (vec[0, :n_components] ** 2).sum(), u
-
-
-@jit("f8(f8[:,:],f8[:,:],u1)", nopython=True)
-def _sst_svd(X_test, X_history, n_components):
-    """Run sst algorithm with svd."""
-    U_test, _, _ = np.linalg.svd(X_test, full_matrices=False)
-    U_history, _, _ = np.linalg.svd(X_history, full_matrices=False)
-    _, s, _ = np.linalg.svd(np.ascontiguousarray(U_test[:, :n_components]).T @
-        np.ascontiguousarray(U_history[:, :n_components]), full_matrices=False)
-    return 1 - s[0]
-
-
 def band_limited_white_noise(length_seconds, sampling_rate, frequency_range, plot=False):
     r"""
     Generate band-limited white noise signal.
@@ -1315,6 +1447,7 @@ def pink_noise(length_seconds, sampling_rate, plot=False):
 
     return pink_noise
 
+
 def brown_noise(length_seconds, sampling_rate, plot=False):
     r"""
     Generate brown noise signal (also known as red noise).
@@ -1352,22 +1485,9 @@ def brown_noise(length_seconds, sampling_rate, plot=False):
 
     return brown_noise
 
-def chirplet_transform(signal, show=False):
-    """
-    Description:
-        Generate the chirplet_trainsform of the input signal
-    Args:
-        signal: Input signal
-        show: whether to show the result of the chirplet transform
-    Returns:
-        The result of the chirplet transform
-    """
-    chirps = FCT()
-    ct_matrix = chirps.compute(signal)
-    if show:
-        plt.title("chirplet transform")
-        plt.imshow(ct_matrix, aspect="auto")
-    return ct_matrix
+
+
+
 
 def impulsive_noise(length_seconds, sampling_rate, probability, plot=False):
     r"""
@@ -1406,6 +1526,7 @@ def impulsive_noise(length_seconds, sampling_rate, probability, plot=False):
         plt.show()
 
     return impulsive_noise
+
 
 def click_noise(length_seconds, sampling_rate, position, amplitude=1.0, plot=False):
     r"""
@@ -1450,7 +1571,6 @@ def click_noise(length_seconds, sampling_rate, position, amplitude=1.0, plot=Fal
         plt.show()
 
     return click_noise
-
 
 
 def transient_noise_pulses(length_seconds, sampling_rate, num_pulses, pulse_duration, amplitude_range, plot=False):
@@ -1503,7 +1623,6 @@ def transient_noise_pulses(length_seconds, sampling_rate, num_pulses, pulse_dura
     return signal
 
 
-
 def thermal_noise(length_seconds, sampling_rate, noise_density, plot=False):
     r"""
     Generate thermal noise signal.
@@ -1546,7 +1665,6 @@ def thermal_noise(length_seconds, sampling_rate, noise_density, plot=False):
     return thermal_noise
 
 
-
 def shot_noise(length_seconds, sampling_rate, rate, plot=False):
     r"""
     Generate shot noise signal.
@@ -1573,7 +1691,7 @@ def shot_noise(length_seconds, sampling_rate, rate, plot=False):
     npnts = int(sampling_rate * length_seconds)  # Number of time samples
 
     # Generate shot noise using numpy
-    time_intervals = np.random.exponential(scale=1/rate, size=npnts)
+    time_intervals = np.random.exponential(scale=1 / rate, size=npnts)
     event_times = np.cumsum(time_intervals)
     signal = np.zeros(npnts)
     for event_time in event_times:
@@ -1590,8 +1708,6 @@ def shot_noise(length_seconds, sampling_rate, rate, plot=False):
         plt.show()
 
     return signal
-
-
 
 
 def flicker_noise(length_seconds, sampling_rate, exponent, amplitude=1.0, plot=False):
@@ -1623,7 +1739,7 @@ def flicker_noise(length_seconds, sampling_rate, exponent, amplitude=1.0, plot=F
     npnts = int(sampling_rate * length_seconds)  # Number of time samples
 
     # Generate flicker noise using numpy and power-law scaling
-    freqs = np.fft.fftfreq(npnts, d=1/sampling_rate)
+    freqs = np.fft.fftfreq(npnts, d=1 / sampling_rate)
     power_spectrum = 1 / np.abs(freqs) ** exponent
     spectrum = np.sqrt(power_spectrum) * np.exp(1j * np.angle(np.fft.fft(np.random.normal(0, 1, npnts))))
     flicker_noise = np.real(np.fft.ifft(spectrum))
@@ -1641,7 +1757,6 @@ def flicker_noise(length_seconds, sampling_rate, exponent, amplitude=1.0, plot=F
         plt.show()
 
     return flicker_noise
-
 
 
 def burst_noise(length_seconds, sampling_rate, burst_rate, burst_duration, amplitude_range, plot=False):
@@ -1678,7 +1793,7 @@ def burst_noise(length_seconds, sampling_rate, burst_rate, burst_duration, ampli
 
     # Generate burst noise using numpy
     signal = np.zeros(npnts)
-    burst_times = np.random.exponential(scale=1/burst_rate, size=npnts)
+    burst_times = np.random.exponential(scale=1 / burst_rate, size=npnts)
     burst_amplitudes = np.random.uniform(amplitude_range[0], amplitude_range[1], npnts)
     current_sample = 0
     for i in range(npnts):
@@ -1696,7 +1811,6 @@ def burst_noise(length_seconds, sampling_rate, burst_rate, burst_duration, ampli
         plt.show()
 
     return signal
-
 
 
 def atmospheric_noise(length_seconds, sampling_rate, frequency_range, plot=False):
@@ -1785,6 +1899,7 @@ def echo_effect(signal, delay_seconds, attenuation, plot=False):
 
     return echoed_signal
 
+
 def load_scg(noise_level, train_or_test: str):
     """
     Load SCG (SeismoCardioGram) data with specified noise level and training/testing mode.
@@ -1837,8 +1952,8 @@ def load_scg(noise_level, train_or_test: str):
 
     return signals, labels, duration, fs
 
-def load_scg_template(noise_level, train_or_test: str):
 
+def load_scg_template(noise_level, train_or_test: str):
     if train_or_test.lower() not in ['train', 'test']:
         raise ValueError("Please make sure it is either 'train' or 'test'!")
 
@@ -1880,8 +1995,6 @@ def load_scg_template(noise_level, train_or_test: str):
     return signals, labels, duration, fs
 
 
-
-
 def cal_corrcoef(signal1, signal2):
     """
     Description:
@@ -1893,7 +2006,8 @@ def cal_corrcoef(signal1, signal2):
     Return:
         The correlate coefficient
     """
-    return np.corrcoef(signal1, signal2)[0,1]
+    return np.corrcoef(signal1, signal2)[0, 1]
+
 
 def cal_serial_corr(signal, lag):
     """
@@ -1907,10 +2021,11 @@ def cal_serial_corr(signal, lag):
         The serial correlate coefficient
     """
     signal1 = signal[lag:]
-    signal2 = signal[:len(signal)-lag]
-    return np.corrcoef(signal1, signal2)[0,1]
+    signal2 = signal[:len(signal) - lag]
+    return np.corrcoef(signal1, signal2)[0, 1]
 
-def cal_autocorr(signal, plot = False):
+
+def cal_autocorr(signal, plot=False):
     """
     Description:
         To get the auto correlate coefficient
@@ -1921,7 +2036,7 @@ def cal_autocorr(signal, plot = False):
     Return:
         The serial correlate coefficient with different lag which is from 0 to len(wave)//2
     """
-    lags = range(len(signal)//2)
+    lags = range(len(signal) // 2)
     corrs = [cal_serial_corr(signal, lag) for lag in lags]
     if plot:
         plt.plot(lags, corrs)
@@ -1929,75 +2044,9 @@ def cal_autocorr(signal, plot = False):
     return lags, corrs
 
 
-def analytic_signal(x):
-    """
-    Description:
-        Get the analytic version of the input signal
-    Args:
-        x: input signal which is a real-valued signal
-    Returns:
-        The analytic version of the input signal which is a complex-valued signal
-    """
-    N = len(x)
-    X = fft(x,N)
-    h = np.zeros(N)
-    h[0] = 1
-    h[1:N//2] = 2*np.ones(N//2-1)
-    h[N//2] = 1
-    Z = X*h
-    z = ifft(Z,N)
-    return z
-
-def hilbert_transform(x):
-    """
-    Description:
-        Get the hilbert transformation of the input signal
-    Args:
-        x: a real-valued singal
-    Returns:
-        Return the result of hilbert transformation which is the imaginary part of the analytic signal. It is a
-        real-valued number.
-    """
-    z = analytic_signal(x)
-    return z.imag
 
 
-def inst_amplitude(signal):
-    """
-    Description:
-        Use hilbert transformation to compute the instantaneous amplitude or the envelope of the input signal
-    Args:
-        signal: input signal
-    Returns:
-        The instantaneous amplitude or the envelope of the signal
-    """
-    z = analytic_signal(signal)
-    return np.abs(z)
 
-def inst_phase(signal):
-    """
-    Description:
-        Use hilbert transformation to compute the instantaneous phase of the input signal
-    Args:
-        signal: input signal
-    Returns:
-        instantaneous phase
-    """
-    z = analytic_signal(signal)
-    return np.unwrap(np.angle(z))
-
-def inst_freq(signal, fs):
-    """
-    Description:
-        Use hilbert transformation to compute the instantaneous temporal frequency of the input signal
-    Args:
-        signal: input signal
-        fs: frequency of sampling of input signal
-    Returns:
-        the instantaneous temporal frequency
-    """
-    inst_phase_sig = inst_phase(signal)
-    return np.diff(inst_phase_sig)/(2*np.pi)*fs
 
 def envelope_hilbert(signal, fs):
     """
@@ -2015,16 +2064,15 @@ def envelope_hilbert(signal, fs):
         regenerated_carrier (array-like): The regenerated carrier signal from the instantaneous phase.
     """
 
-    z= hilbert(signal) #form the analytical signal
-    inst_amplitude = np.abs(z) #envelope extraction
-    inst_phase = np.unwrap(np.angle(z))#inst phase
-    inst_freq = np.diff(inst_phase)/(2*np.pi)*fs #inst frequency
+    z = hilbert(signal)  # form the analytical signal
+    inst_amplitude = np.abs(z)  # envelope extraction
+    inst_phase = np.unwrap(np.angle(z))  # inst phase
+    inst_freq = np.diff(inst_phase) / (2 * np.pi) * fs  # inst frequency
 
-    #Regenerate the carrier from the instantaneous phase
+    # Regenerate the carrier from the instantaneous phase
     regenerated_carrier = np.cos(inst_phase)
 
     return inst_amplitude, inst_freq, inst_phase, regenerated_carrier
-
 
 
 def get_template(signal):
@@ -2089,109 +2137,20 @@ def get_template(signal):
     average_pulse = np.mean(max_cluster, axis=0)
     return average_pulse
 
-def update_array(a, data_tmp):
-    """
-    Description:
-        Update an array 'a' by removing elements based on the pattern in 'data_tmp'.
-
-    Params:
-        a (numpy.ndarray): The input array to be updated.
-        data_tmp (numpy.ndarray): The data array used for comparison.
-
-    Returns:
-        updated_array (numpy.ndarray): The updated array after removing elements.
-    """
-    i = 0
-    while i < len(a) - 2:
-        if data_tmp[a[i]] < data_tmp[a[i + 1]] < data_tmp[a[i + 2]]:
-            a = np.delete(a, i)
-        elif data_tmp[a[i]] > data_tmp[a[i + 1]] > data_tmp[a[i + 2]]:
-            a = np.delete(a, i + 2)
-        else:
-            i += 1
-    return a
-
-def average_envelope(signal, window_length):
-    """
-    Description:
-        Use the average window to get the envelope
-    Args:
-        signal: input signal
-        window_length: the length of the average window
-    Returns:
-        envelope: the envelope of the input signal
-    """
-    weights = np.ones(window_length) / window_length
-    envelope = np.convolve(np.abs(signal), weights, mode='valid')
 
 
-    padding = (window_length - 1) // 2
-    envelope = np.concatenate([np.zeros(padding), envelope, np.zeros(padding)])
-
-    return envelope
 
 
-def envelope_from_peaks(signal):
-    """
-    Description
-        Interpolation the peaks to get the envelope of the input signal. The algorithm is only suitable for the signal
-        with a lot of noise
-    Args:
-        signal: The input signal
-    Returns:
-        envelope: The envelope of the input signal
-    """
-    t = np.arange(len(signal))
-    peak_indices, _ = find_peaks(signal)
-
-    # interpolate the peaks to form the envelope
-    t_peaks = t[peak_indices]
-    peak_values = signal[peak_indices]
-    interpolation_func = interp1d(t_peaks, peak_values, kind='linear', bounds_error=False, fill_value=0)
-    envelope = interpolation_func(t)
-    return envelope
 
 
-def get_peaks(signal):
-    """
-    Description:
-        Detect peaks in a signal and perform linear interpolation to obtain an envelope.
 
-    Params:
-        signal (numpy.ndarray): The input signal.
 
-    Returns:
-        peaks (numpy.ndarray): An array containing the indices of the detected peaks.
-    """
-    t = np.arange(len(signal))
-    # find all peaks in th signal
-    peak_indices, _ = find_peaks(signal)
 
-    # interpolate the peaks to form the envelope
-    t_peaks = t[peak_indices]
-    peak_values = signal[peak_indices]
-    interpolation_func = interp1d(t_peaks, peak_values, kind='linear', bounds_error=False, fill_value=0)
-    envelope = interpolation_func(t)
 
-    # find the peaks of envelope
-    peaks2, _ = find_peaks(envelope, distance=10)
 
-    # remove wrong peaks
-    peaks2 = update_array(peaks2, signal)
 
-    # make sure the first peak is the higher peak
-    if len(peaks2) > 1:
-        if (signal[peaks2[1]] > signal[peaks2[0]]):
-            peaks2 = np.delete(peaks2, 0)
 
-    # make sure the number of peaks is even
-    if len(peaks2) % 2 != 0:
-        peaks2 = np.delete(peaks2, len(peaks2) - 1)
-
-    return peaks2
-
-def tsfel_feature(signal, fs = 100):
-
+def tsfel_feature(signal, fs=100):
     with open("../json/all_features.json", 'r') as file:
         cgf_file = json.load(file)
 
@@ -2201,6 +2160,7 @@ def tsfel_feature(signal, fs = 100):
                                                     features_path="../utils/my_features.py").values.flatten()
 
     return features
+
 
 # Below is the needed function for chirplet transform
 class FCT:
@@ -2214,6 +2174,7 @@ class FCT:
         _samplerate : samplerate of the signal
 
     """
+
     def __init__(self,
                  duration_longest_chirplet=1,
                  num_octaves=5,
@@ -2251,18 +2212,18 @@ class FCT:
         Returns :
             The bank of chirplets
         """
-        num_chirps = self._num_octaves*self._num_chirps_by_octave
+        num_chirps = self._num_octaves * self._num_chirps_by_octave
 
-        #create a list of coefficients based on attributes
-        lambdas = 2.0**(1+arange(num_chirps)/float(self._num_chirps_by_octave))
+        # create a list of coefficients based on attributes
+        lambdas = 2.0 ** (1 + arange(num_chirps) / float(self._num_chirps_by_octave))
 
-        #Low frequencies for a signal
-        start_frequencies = (self._samplerate /lambdas)/2.0
+        # Low frequencies for a signal
+        start_frequencies = (self._samplerate / lambdas) / 2.0
 
-        #high frequencies for a signal
-        end_frequencies = self._samplerate /lambdas
+        # high frequencies for a signal
+        end_frequencies = self._samplerate / lambdas
 
-        durations = 2.0*self._duration_longest_chirplet/flipud(lambdas)
+        durations = 2.0 * self._duration_longest_chirplet / flipud(lambdas)
 
         chirplets = list()
         for low_frequency, high_frequency, duration in zip(start_frequencies, end_frequencies, durations):
@@ -2276,7 +2237,7 @@ class FCT:
             The time bin duration
 
         """
-        return self._end_smoothing*10
+        return self._end_smoothing * 10
 
     def compute(self, input_signal):
         """compute the FCT on the given signal
@@ -2290,17 +2251,17 @@ class FCT:
         # keep the real length of the signal
         size_data = len(input_signal)
 
-        nearest_power_2 = 2**(size_data-1).bit_length()
+        nearest_power_2 = 2 ** (size_data - 1).bit_length()
 
         # find the best power of 2
         # the signal must not be too short
 
-        while nearest_power_2 <= self._samplerate*self._duration_longest_chirplet:
+        while nearest_power_2 <= self._samplerate * self._duration_longest_chirplet:
             nearest_power_2 *= 2
 
         # pad with 0 to have the right length of signal
 
-        data = np.lib.pad(input_signal, (0, nearest_power_2-size_data), 'constant', constant_values=0)
+        data = np.lib.pad(input_signal, (0, nearest_power_2 - size_data), 'constant', constant_values=0)
 
         # apply the fct to the adapted length signal
 
@@ -2323,8 +2284,8 @@ def resize_chirps(size_data, size_power_2, chirps):
         Chirps with the correct length
     """
     size_chirps = len(chirps)
-    ratio = size_data/size_power_2
-    size = int(ratio*len(chirps[0]))
+    ratio = size_data / size_power_2
+    size = int(ratio * len(chirps[0]))
 
     resize_chirps = np.zeros((size_chirps, size))
     for i in range(0, size_chirps):
@@ -2342,6 +2303,7 @@ class Chirplet:
         _polynome_degree : degree of the polynome to generate the coefficients of the chirplet
         _filter_coefficients : coefficients applied to the signal
     """
+
     def __init__(self, samplerate, min_frequency, max_frequency, sigma, polynome_degree):
 
         """
@@ -2356,7 +2318,7 @@ class Chirplet:
 
         self._max_frequency = max_frequency
 
-        self._duration = sigma/10
+        self._duration = sigma / 10
 
         self._samplerate = samplerate
 
@@ -2364,24 +2326,25 @@ class Chirplet:
 
         self._filter_coefficients = self.calcul_coefficients()
 
-
     def calcul_coefficients(self):
         """calculate coefficients for the chirplets
         Returns :
             apodization coeeficients
         """
-        num_coeffs = linspace(0, self._duration, int(self._samplerate*self._duration))
+        num_coeffs = linspace(0, self._duration, int(self._samplerate * self._duration))
 
         if self._polynome_degree:
-            temp = (self._max_frequency-self._min_frequency)
-            temp /= ((self._polynome_degree+1)*self._duration**self._polynome_degree)*num_coeffs**self._polynome_degree+self._min_frequency
-            wave = cos(2*pi*num_coeffs*temp)
+            temp = (self._max_frequency - self._min_frequency)
+            temp /= ((
+                                 self._polynome_degree + 1) * self._duration ** self._polynome_degree) * num_coeffs ** self._polynome_degree + self._min_frequency
+            wave = cos(2 * pi * num_coeffs * temp)
         else:
-            temp = (self._min_frequency*(self._max_frequency/self._min_frequency)**(num_coeffs/self._duration)-self._min_frequency)
-            temp *= self._duration/log(self._max_frequency/self._min_frequency)
-            wave = cos(2*pi*temp)
+            temp = (self._min_frequency * (self._max_frequency / self._min_frequency) ** (
+                        num_coeffs / self._duration) - self._min_frequency)
+            temp *= self._duration / log(self._max_frequency / self._min_frequency)
+            wave = cos(2 * pi * temp)
 
-        coeffs = wave*hanning(len(num_coeffs))**2
+        coeffs = wave * hanning(len(num_coeffs)) ** 2
 
         return coeffs
 
@@ -2396,6 +2359,7 @@ class Chirplet:
         """
         windowed_fft = build_fft(input_signal, self._filter_coefficients, thresh_window)
         return fft_smoothing(fabs(windowed_fft), end_smoothing)
+
 
 def apply_filterbank(input_signal, chirplets, end_smoothing):
     """generate list of signal with chirplets
@@ -2415,7 +2379,6 @@ def apply_filterbank(input_signal, chirplets, end_smoothing):
     return np.array(fast_chirplet_transform)
 
 
-
 def fft_smoothing(input_signal, sigma):
     """smooth the fast transform Fourier
     Params :
@@ -2427,9 +2390,9 @@ def fft_smoothing(input_signal, sigma):
     """
     size_signal = input_signal.size
 
-    #shorten the signal
-    new_size = int(floor(10.0*size_signal*sigma))
-    half_new_size = new_size//2
+    # shorten the signal
+    new_size = int(floor(10.0 * size_signal * sigma))
+    half_new_size = new_size // 2
 
     fftx = fft(input_signal)
 
@@ -2442,12 +2405,13 @@ def fft_smoothing(input_signal, sigma):
 
     apodization_coefficients = generate_apodization_coeffs(half_new_size, sigma, size_signal)
 
-    #apply the apodization coefficients
+    # apply the apodization coefficients
     short_fftx[:half_new_size] *= apodization_coefficients
     short_fftx[half_new_size:] *= flipud(apodization_coefficients)
 
     realifftxw = ifft(short_fftx).real
     return realifftxw
+
 
 def generate_apodization_coeffs(num_coeffs, sigma, size):
     """generate apodization coefficients
@@ -2460,10 +2424,11 @@ def generate_apodization_coeffs(num_coeffs, sigma, size):
 
     """
     apodization_coefficients = arange(num_coeffs)
-    apodization_coefficients = apodization_coefficients**2
-    apodization_coefficients = apodization_coefficients/(2*(sigma*size)**2)
+    apodization_coefficients = apodization_coefficients ** 2
+    apodization_coefficients = apodization_coefficients / (2 * (sigma * size) ** 2)
     apodization_coefficients = exp(-apodization_coefficients)
     return apodization_coefficients
+
 
 def fft_based(input_signal, filter_coefficients, boundary=0):
     """applied fft if the signal is too short to be splitted in windows
@@ -2475,22 +2440,25 @@ def fft_based(input_signal, filter_coefficients, boundary=0):
         audio signal with application of fast Fourier transform
     """
     num_coeffs = filter_coefficients.size
-    half_size = num_coeffs//2
+    half_size = num_coeffs // 2
 
-    if boundary == 0:#ZERO PADDING
+    if boundary == 0:  # ZERO PADDING
         input_signal = np.lib.pad(input_signal, (half_size, half_size), 'constant', constant_values=0)
-        filter_coefficients = np.lib.pad(filter_coefficients, (0, input_signal.size-num_coeffs), 'constant', constant_values=0)
-        newx = ifft(fft(input_signal)*fft(filter_coefficients))
-        return newx[num_coeffs-1:-1]
+        filter_coefficients = np.lib.pad(filter_coefficients, (0, input_signal.size - num_coeffs), 'constant',
+                                         constant_values=0)
+        newx = ifft(fft(input_signal) * fft(filter_coefficients))
+        return newx[num_coeffs - 1:-1]
 
-    elif boundary == 1:#symmetric
-        input_signal = np.concatenate([flipud(input_signal[:half_size]), input_signal, flipud(input_signal[half_size:])])
-        filter_coefficients = np.lib.pad(filter_coefficients, (0, input_signal.size-num_coeffs), 'constant', constant_values=0)
-        newx = ifft(fft(input_signal)*fft(filter_coefficients))
-        return newx[num_coeffs-1:-1]
+    elif boundary == 1:  # symmetric
+        input_signal = np.concatenate(
+            [flipud(input_signal[:half_size]), input_signal, flipud(input_signal[half_size:])])
+        filter_coefficients = np.lib.pad(filter_coefficients, (0, input_signal.size - num_coeffs), 'constant',
+                                         constant_values=0)
+        newx = ifft(fft(input_signal) * fft(filter_coefficients))
+        return newx[num_coeffs - 1:-1]
 
-    else:#periodic
-        return roll(ifft(fft(input_signal)*fft(filter_coefficients, input_signal.size)), -half_size).real
+    else:  # periodic
+        return roll(ifft(fft(input_signal) * fft(filter_coefficients, input_signal.size)), -half_size).real
 
 
 def build_fft(input_signal, filter_coefficients, threshold_windows=6, boundary=0):
@@ -2505,189 +2473,88 @@ def build_fft(input_signal, filter_coefficients, threshold_windows=6, boundary=0
 
     """
     num_coeffs = filter_coefficients.size
-    #print(n,boundary,M)
-    half_size = num_coeffs//2
+    # print(n,boundary,M)
+    half_size = num_coeffs // 2
     signal_size = input_signal.size
-    #power of 2 to apply fast fourier transform
-    windows_size = 2**ceil(log2(num_coeffs*(threshold_windows+1)))
-    number_of_windows = floor(signal_size//windows_size)
+    # power of 2 to apply fast fourier transform
+    windows_size = 2 ** ceil(log2(num_coeffs * (threshold_windows + 1)))
+    number_of_windows = floor(signal_size // windows_size)
 
     if number_of_windows == 0:
         return fft_based(input_signal, filter_coefficients, boundary)
 
     windowed_fft = empty_like(input_signal)
-    #pad with 0 to have a size in a power of 2
+    # pad with 0 to have a size in a power of 2
     windows_size = int(windows_size)
 
-    zeropadding = np.lib.pad(filter_coefficients, (0, windows_size-num_coeffs), 'constant', constant_values=0)
+    zeropadding = np.lib.pad(filter_coefficients, (0, windows_size - num_coeffs), 'constant', constant_values=0)
 
     h_fft = fft(zeropadding)
 
-    #to browse the whole signal
+    # to browse the whole signal
     current_pos = 0
 
-    #apply fft to a part of the signal. This part has a size which is a power
-    #of 2
-    if boundary == 0:#ZERO PADDING
+    # apply fft to a part of the signal. This part has a size which is a power
+    # of 2
+    if boundary == 0:  # ZERO PADDING
 
-        #window is half padded with since it's focused on the first half
-        window = input_signal[current_pos:current_pos+windows_size-half_size]
-        zeropaddedwindow = np.lib.pad(window, (len(h_fft)-len(window), 0), 'constant', constant_values=0)
+        # window is half padded with since it's focused on the first half
+        window = input_signal[current_pos:current_pos + windows_size - half_size]
+        zeropaddedwindow = np.lib.pad(window, (len(h_fft) - len(window), 0), 'constant', constant_values=0)
         x_fft = fft(zeropaddedwindow)
 
-    elif boundary == 1:#SYMMETRIC
-        window = np.concatenate([flipud(input_signal[:half_size]), input_signal[current_pos:current_pos+windows_size-half_size]])
+    elif boundary == 1:  # SYMMETRIC
+        window = np.concatenate(
+            [flipud(input_signal[:half_size]), input_signal[current_pos:current_pos + windows_size - half_size]])
         x_fft = fft(window)
 
     else:
         x_fft = fft(input_signal[:windows_size])
 
-    windowed_fft[:windows_size-num_coeffs] = (ifft(x_fft*h_fft)[num_coeffs-1:-1]).real
+    windowed_fft[:windows_size - num_coeffs] = (ifft(x_fft * h_fft)[num_coeffs - 1:-1]).real
 
-    current_pos += windows_size-num_coeffs-half_size
-    #apply fast fourier transofm to each windows
-    while current_pos+windows_size-half_size <= signal_size:
-
-        x_fft = fft(input_signal[current_pos-half_size:current_pos+windows_size-half_size])
-        #Suppress the warning, work on the real/imagina
-        windowed_fft[current_pos:current_pos+windows_size-num_coeffs] = (ifft(x_fft*h_fft)[num_coeffs-1:-1]).real
-        current_pos += windows_size-num_coeffs
+    current_pos += windows_size - num_coeffs - half_size
+    # apply fast fourier transofm to each windows
+    while current_pos + windows_size - half_size <= signal_size:
+        x_fft = fft(input_signal[current_pos - half_size:current_pos + windows_size - half_size])
+        # Suppress the warning, work on the real/imagina
+        windowed_fft[current_pos:current_pos + windows_size - num_coeffs] = (
+        ifft(x_fft * h_fft)[num_coeffs - 1:-1]).real
+        current_pos += windows_size - num_coeffs
     # print(countloop)
-    #apply fast fourier transform to the rest of the signal
-    if windows_size-(signal_size-current_pos+half_size) < half_size:
+    # apply fast fourier transform to the rest of the signal
+    if windows_size - (signal_size - current_pos + half_size) < half_size:
 
-        window = input_signal[current_pos-half_size:]
-        zeropaddedwindow = np.lib.pad(window, (0, int(windows_size-(signal_size-current_pos+half_size))), 'constant', constant_values=0)
+        window = input_signal[current_pos - half_size:]
+        zeropaddedwindow = np.lib.pad(window, (0, int(windows_size - (signal_size - current_pos + half_size))),
+                                      'constant', constant_values=0)
         x_fft = fft(zeropaddedwindow)
-        windowed_fft[current_pos:] = roll(ifft(x_fft*h_fft), half_size)[half_size:half_size+windowed_fft.size-current_pos].real
+        windowed_fft[current_pos:] = roll(ifft(x_fft * h_fft), half_size)[
+                                     half_size:half_size + windowed_fft.size - current_pos].real
         windowed_fft[-half_size:] = convolve(input_signal[-num_coeffs:], filter_coefficients, 'same')[-half_size:]
     else:
 
-        window = input_signal[current_pos-half_size:]
-        zeropaddedwindow = np.lib.pad(window, (0, int(windows_size-(signal_size-current_pos+half_size))), 'constant', constant_values=0)
+        window = input_signal[current_pos - half_size:]
+        zeropaddedwindow = np.lib.pad(window, (0, int(windows_size - (signal_size - current_pos + half_size))),
+                                      'constant', constant_values=0)
         x_fft = fft(zeropaddedwindow)
-        windowed_fft[current_pos:] = ifft(x_fft*h_fft)[num_coeffs-1:num_coeffs+windowed_fft.size-current_pos-1].real
+        windowed_fft[current_pos:] = ifft(x_fft * h_fft)[
+                                     num_coeffs - 1:num_coeffs + windowed_fft.size - current_pos - 1].real
 
     return windowed_fft
+
+
 # chirplet transform function ends here
 
 
 
-def pfd(signal):
-    """
-    Description:
-        It calculates the fractal dimension of a signal to describe its complexity and irregularity. A higher Petrosian
-        Fractal Dimension value indicates a more complex signal.
-    Args:
-        signal: The input signal
-    Returns:
-        The value of pfd
-    """
-    diff = np.diff(signal)
-    n_zero_crossings = np.sum(diff[:-1] * diff[1:] < 0)
-    pfd = np.log10(len(signal)) / (np.log10(len(signal)) + np.log10(len(signal) / (len(signal) + 0.4 * n_zero_crossings)))
-
-    return pfd
-
-def my_wvd(signal, show=False):
-    """
-    Description:
-        Analyze the time-frequency characteristics of a signal using the Wigner-Ville Transform (WVT) and visualize the results.
-
-    Params:
-        signal (numpy.ndarray): The input signal.
-        show: whether to plot the result
-    Returns:
-        tfr_wvd (numpy.ndarray): The time-frequency representation (WVD) of the signal.
-        t_wvd (numpy.ndarray): Time values corresponding to the WVD.
-        f_wvd (numpy.ndarray): Normalized frequency values corresponding to the WVD.
-    """
-    wvd = tftb.processing.WignerVilleDistribution(signal)
-    tfr_wvd, t_wvd, f_wvd = wvd.run()
-    if show:
-        wvd.plot(kind="contourf", scale="log")
-    return tfr_wvd, t_wvd, f_wvd
 
 
-def my_stft(signal, fs, plot=False, window='hann', nperseg=256, noverlap=None, nfft=None, detrend=False, return_onesided=True, boundary='zeros', padded=True, axis=-1, scaling='spectrum'):
-    """
-        Description:
-            Compute the Linear Spectrogram of a signal using Short-time Fourier Transform (STFT).
 
-        Params:
-            signal (numpy.ndarray): The input signal.
-            fs (int): The sample rate of the signal.
-            nperseg (int, optional): The size of the analysis window in samples. Default is 256.
-            The other parameters are seldom used.
 
-        Returns:
-            freqs (numpy.ndarray): The frequency values in Hz.
-            times (numpy.ndarray): The time values in seconds.
-            spectrogram (numpy.ndarray): The computed linear spectrogram.
-        """
-    f,t,Z = scipy.signal.stft(signal, fs, window, nperseg, noverlap, nfft, detrend, return_onesided, boundary, padded, axis, scaling)
-    if plot:
-        plt.pcolormesh(t, f, np.abs(Z))
-        plt.show()
-    return f,t,Z
 
-def sst_stft(signal, fs, window, nperseg=256, show=False, n_fft=None, hop_len=1, modulated=True, ssq_freqs=None, padtype='reflect', squeezing='sum', gamma=None, preserve_transform=None, dtype=None, astensor=True, flipud=False, get_w=False, get_dWx=False):
-    """
-    Description:
-        Synchrosqueezed Short-Time Fourier Transform.
-    Args:
-        signal: the input signal
-        fs: frequency of sampling
-        window: type of the window
-        nperseg: Length of each segment
-        show: whether to show the result
-        n_fft: length of fft
-        The other parameters are seldom used.
-    Returns:
-        Tx: Synchrosqueezed STFT of `x`, of same shape as `Sx`.
-        Sx: STFT of `x`
-        ssq_freqs: Frequencies associated with rows of `Tx`.
-        Sfs: Frequencies associated with rows of `Sx` (by default == `ssq_freqs`).
-    """
-    Tx, Sx, ssq_freqs, Sfs= sq.ssq_stft(signal, window=window, win_len = nperseg, fs = fs, n_fft=n_fft)
-    if show:
-        plt.subplot(2,1,1)
-        plt.title("STFT of Input signal")
-        plt.imshow(np.abs(Sx),aspect="auto")
-        plt.subplot(2,1,2)
-        plt.title("Synchrosqueezed STFT of Input signal")
-        plt.imshow(np.abs(Tx),aspect="auto")
-        plt.tight_layout()
-        plt.show()
-    return Tx, Sx, ssq_freqs, Sfs
 
-def mexican_hat_wavelet(sigma, length):
-    """
-    Description:
-        Generate the mexican hat wavelet. It is the second derivative of the Gaussian function.
-    Args:
-        sigma: It has the same meaning in the Gaussian function
-        length: length of the wavelet
-    Returns:
-        The mexican hat wavelet
-    """
-    t = np.linspace(-int(length/2),length/2,length*10)
-    psi = 1/(np.sqrt(2*np.pi)*np.power(sigma,3))*np.exp(-np.power(t,2)/(2*np.power(sigma,2)))*((np.power(t,2)/np.power(sigma,2))-1)
-    return psi
 
-def morlet_wavelet(length,sigma,a=5):
-    """
-    Description:
-        Generate the morlet wavelet which value is complex.
-    Args:
-        length: Length of the wavelet.
-        sigma: Scaling parameter that affects the width of the window.
-        a: Modulation parameter. Default is 5
-    Returns:
-        The morlet wavelet which is complex-valued.
-    """
-    morlet_wav = scipy.signal.morlet2(length,sigma,a)
-    return morlet_wav
 
 
 # # 定义Chirplet函数
@@ -2731,4 +2598,3 @@ def cwt(data, sampling_rate, wavename, totalscal=256):
     cwtmatr, frequencies = pywt.cwt(data, scales, wavename, 1.0 / sampling_rate)
 
     return cwtmatr, frequencies
-

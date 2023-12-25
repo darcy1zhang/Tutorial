@@ -1128,7 +1128,7 @@ def load_scg(noise_level, train_or_test: str):
     filepath = 'sim_{}_{}_{}_{}_{}.npy'.format(n_samples, noise_level, S_start, S_end, train_or_test)
 
     # Combine the current file's directory and the constructed file path
-    file_path = os.path.join(os.path.dirname(os.path.dirname(current_file_path)), 'data', filepath)
+    file_path = os.path.join(os.path.dirname(os.path.dirname(current_file_path)), '../data', filepath)
 
     # Load data from the constructed file path
     data = np.load(file_path)

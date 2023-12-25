@@ -8,13 +8,9 @@ warnings.filterwarnings('ignore')
 import sys
 
 sys.path.insert(1, '../')
-import datasim as nk
+from Others import datasim as nk
 import numpy as np
-import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
 import random
-from scipy import signal
 from tqdm import tqdm
 
 if __name__ == '__main__':

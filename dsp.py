@@ -351,8 +351,13 @@ def my_stft(signal, fs, plot=False, window='hann', nperseg=256, noverlap=None, n
     """
     f, t, Z = scipy.signal.stft(signal, fs, window, nperseg, noverlap, nfft, detrend, return_onesided, boundary, padded,
                                 axis, scaling)
+    # print(Z.shape)
     if plot:
+        plt.title("STFT of input signal")
         plt.pcolormesh(t, f, np.abs(Z))
+        plt.xlabel("Time/S")
+        plt.ylabel("Frequency")
+        plt.colorbar(label='Magnitude')
         plt.show()
     return f, t, Z
 
@@ -413,8 +418,8 @@ def my_cwt(signal, scales, wavelet, fs, show=False):
         plt.imshow(np.abs(coefficients), aspect='auto', extent=[0, len(signal) / fs, frequencies[-1], frequencies[0]])
         plt.colorbar(label='Magnitude')
         plt.title('Continuous Wavelet Transform')
-        plt.xlabel('Time (seconds)')
-        plt.ylabel('Frequency (Hz)')
+        plt.xlabel('Time/s')
+        plt.ylabel('Frequency')
         plt.show()
     return coefficients, frequencies
 
@@ -434,7 +439,10 @@ def chirplet_transform(signal, show=False):
     ct_matrix = chirps.compute(signal)
     if show:
         plt.title("chirplet transform")
+        plt.xlabel("Time/s")
+        plt.ylabel("Frequency")
         plt.imshow(ct_matrix, aspect="auto")
+        plt.colorbar(label="Magnitude")
     return ct_matrix
 
 ## Wigner Ville Distribution (WVD)
@@ -483,9 +491,15 @@ def sst_stft(signal, fs, window, nperseg=256, show=False, n_fft=None, hop_len=1,
         plt.subplot(2, 1, 1)
         plt.title("STFT of Input signal")
         plt.imshow(np.abs(Sx), aspect="auto")
+        plt.xlabel("Time")
+        plt.ylabel("Frequency")
+        plt.colorbar(label="Magnitude")
         plt.subplot(2, 1, 2)
         plt.title("Synchrosqueezed STFT of Input signal")
+        plt.xlabel("Time")
+        plt.ylabel("Frequency")
         plt.imshow(np.abs(Tx), aspect="auto")
+        plt.colorbar(label="Magnitude")
         plt.tight_layout()
         plt.show()
     return Tx, Sx, ssq_freqs, Sfs
@@ -516,14 +530,14 @@ def sst_cwt(signal, wavelet, scales, nv, fs, gamma=None, show=False):
         plt.imshow(np.abs(Wx), aspect='auto', extent=[0, len(signal) / fs, ssq_freqs[-1], ssq_freqs[0]])
         plt.colorbar(label='Magnitude')
         plt.title('Continuous Wavelet Transform')
-        plt.xlabel('Time (seconds)')
-        plt.ylabel('Frequency (Hz)')
+        plt.xlabel('Time/s')
+        plt.ylabel('Frequency')
         plt.subplot(2, 1, 2)
         plt.imshow(np.abs(Tx), aspect='auto', extent=[0, len(signal) / fs, ssq_freqs[-1], ssq_freqs[0]])
         plt.colorbar(label='Magnitude')
         plt.title('Synchrosqueezed Continuous Wavelet Transform')
-        plt.xlabel('Time (seconds)')
-        plt.ylabel('Frequency (Hz)')
+        plt.xlabel('Time/s')
+        plt.ylabel('Frequency')
         plt.tight_layout()
         plt.show()
     return Tx, Wx, ssq_freqs, scales

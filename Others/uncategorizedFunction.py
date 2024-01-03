@@ -2,7 +2,21 @@ from scipy.signal import butter, lfilter
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import json
 
+
+
+
+def tsfel_feature(signal, fs=100):
+    with open("../json/all_features.json", 'r') as file:
+        cgf_file = json.load(file)
+
+    # cgf_file = tsfel.get_features_by_domain("temporal")
+
+    features = tsfel.time_series_features_extractor(cgf_file, signal, fs=fs, window_size=len(signal),
+                                                    features_path="../utils/my_features.py").values.flatten()
+
+    return features
 
 # DSP Functions
 def butter_bandpass(lowcut, highcut, fs, order=5):

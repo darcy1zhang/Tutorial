@@ -8,8 +8,6 @@ from scipy.stats import entropy, kurtosis, skew
 from scipy.interpolate import interp1d
 from scipy.fft import fft, ifft
 from numpy.fft import fft, ifft, fftfreq
-import json
-import tsfel
 from sklearn.metrics import mean_squared_error
 import pywt
 import tftb
@@ -741,17 +739,6 @@ def cal_autocorr(signal, plot=False):
 
 
 
-
-def tsfel_feature(signal, fs=100):
-    with open("../json/all_features.json", 'r') as file:
-        cgf_file = json.load(file)
-
-    # cgf_file = tsfel.get_features_by_domain("temporal")
-
-    features = tsfel.time_series_features_extractor(cgf_file, signal, fs=fs, window_size=len(signal),
-                                                    features_path="../utils/my_features.py").values.flatten()
-
-    return features
 
 
 # Below is the needed function for chirplet transform

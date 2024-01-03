@@ -1,16 +1,15 @@
 numpy
 matplotlib
 scipy
-tsfel
-fastsst
+scikit-learn
 pandas
 PyWavelets
 tftb
 seaborn
 tqdm
-scikit-learn
 ssqueezepy
 numba
+fastsst
 
 
 

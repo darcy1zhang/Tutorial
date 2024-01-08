@@ -3,8 +3,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import json
-
-
+from scipy.signal import butter, lfilter, hilbert, chirp, welch, find_peaks
+from scipy.stats import entropy, kurtosis, skew
+import tsfel
 
 
 def tsfel_feature(signal, fs=100):
@@ -1196,3 +1197,169 @@ def load_scg_template(noise_level, train_or_test: str):
     fs = 100
 
     return signals, labels, duration, fs
+
+
+def extract_spectral_entropy(signal, fs, num_segments=10):
+    """
+    Description:
+        Extract the spectral entropy of a signal.
+
+    Params:
+        signal (numpy.ndarray): Input signal.
+        fs (float): Sampling frequency of the signal.
+        num_segments (int, optional): Number of segments for entropy calculation.
+
+    Returns:
+        float: Spectral entropy value.
+    """
+
+    f, Pxx = welch(signal, fs=fs)
+    segment_size = len(f) // num_segments
+    segment_entropies = []
+
+    for i in range(num_segments):
+        start_idx = i * segment_size
+        end_idx = (i + 1) * segment_size
+        segment_Pxx = Pxx[start_idx:end_idx]
+        segment_entropies.append(entropy(segment_Pxx))
+
+    spectral_entropy = np.mean(segment_entropies)
+    return spectral_entropy
+
+
+
+
+def extract_mean_spectral_energy(signal, fs):
+    """
+    Description:
+        Extract the mean spectral energy of a signal.
+
+    Params:
+        signal (numpy.ndarray): Input signal.
+        fs (float): Sampling frequency of the signal.
+
+    Returns:
+        float: Mean spectral energy value.
+    """
+
+    f, Pxx = welch(signal, fs=fs)
+    mean_spectral_energy = np.mean(Pxx)
+    return mean_spectral_energy
+
+
+
+
+def DCT_synthesize(amps, fs, ts):
+    """
+    Description:
+        Synthesize a mixture of cosines with given amps and fs.
+
+    Input:
+        amps: amplitudes
+        fs: frequencies in Hz
+        ts: times to evaluate the signal
+
+    Returns:
+        wave array
+    """
+    args = np.outer(ts, fs)
+    M = np.cos(np.pi * 2 * args)
+    ys = np.dot(M, amps)
+    return ys
+
+
+def DCT_analyze(ys, fs, ts):
+    """
+    Description:
+        Analyze a mixture of cosines and return amplitudes.
+
+    Input:
+        ys: wave array
+        fs: frequencies in Hz
+        ts: time when the signal was evaluated
+
+    returns:
+        vector of amplitudes
+    """
+    args = np.outer(ts, fs)
+    M = np.cos(np.pi * 2 * args)
+    amps = np.dot(M, ys) / 2
+    return amps
+
+
+def DCT_iv(ys):
+    """
+    Description:
+        Computes DCT-IV.
+
+    Input:
+        wave array
+
+    returns:
+        vector of amplitudes
+    """
+    N = len(ys)
+    ts = (0.5 + np.arange(N)) / N
+    fs = (0.5 + np.arange(N)) / 2
+    args = np.outer(ts, fs)
+    M = np.cos(np.pi * 2 * args)
+    amps = np.dot(M, ys) / 2
+    return amps
+
+
+def inverse_DCT_iv(amps):
+    return DCT_iv(amps) * 2
+
+
+
+
+
+
+
+def cal_corrcoef(signal1, signal2):
+    """
+    Description:
+        To get the correlate coefficient
+
+    Input:
+        Two signal with same length
+
+    Return:
+        The correlate coefficient
+    """
+    return np.corrcoef(signal1, signal2)[0, 1]
+
+
+def cal_serial_corr(signal, lag):
+    """
+    Description:
+        To get the serial correlate coefficient
+
+    Input:
+        One signal and the lag which means how much it delays
+
+    Return:
+        The serial correlate coefficient
+    """
+    signal1 = signal[lag:]
+    signal2 = signal[:len(signal) - lag]
+    return np.corrcoef(signal1, signal2)[0, 1]
+
+
+def cal_autocorr(signal, plot=False):
+    """
+    Description:
+        To get the auto correlate coefficient
+
+    Input:
+        One signal
+
+    Return:
+        The serial correlate coefficient with different lag which is from 0 to len(wave)//2
+    """
+    lags = range(len(signal) // 2)
+    corrs = [cal_serial_corr(signal, lag) for lag in lags]
+    if plot:
+        plt.plot(lags, corrs)
+        plt.show()
+    return lags, corrs

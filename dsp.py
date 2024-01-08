@@ -3,15 +3,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy
 import scipy.signal
-from scipy.signal import butter, lfilter, hilbert, chirp, welch, find_peaks
-from scipy.stats import entropy, kurtosis, skew
+from scipy.signal import welch, find_peaks
 from scipy.interpolate import interp1d
 from scipy.fft import fft, ifft
 from numpy.fft import fft, ifft, fftfreq
 from sklearn.metrics import mean_squared_error
 import pywt
 import tftb
-# import chirplet
 import ssqueezepy as sq
 from pylab import (arange, flipud, linspace, cos, pi, log, hanning,
                    ceil, log2, floor, empty_like, fft, ifft, fabs, exp, roll, convolve)
@@ -443,303 +441,6 @@ def chirplet_transform(signal, show=False):
         plt.colorbar(label="Magnitude")
     return ct_matrix
 
-## Wigner Ville Distribution (WVD)
-def my_wvd(signal, show=False):
-    """
-    Description:
-        Analyze the time-frequency characteristics of a signal using the Wigner-Ville Transform (WVT) and visualize the results.
-
-    Params:
-        signal (numpy.ndarray): The input signal.
-        show: whether to plot the result
-    Returns:
-        tfr_wvd (numpy.ndarray): The time-frequency representation (WVD) of the signal.
-        t_wvd (numpy.ndarray): Time values corresponding to the WVD.
-        f_wvd (numpy.ndarray): Normalized frequency values corresponding to the WVD.
-    """
-    wvd = tftb.processing.WignerVilleDistribution(signal)
-    tfr_wvd, t_wvd, f_wvd = wvd.run()
-    if show:
-        wvd.plot(kind="contourf", scale="log")
-    return tfr_wvd, t_wvd, f_wvd
-
-## SynchroSqueezing Transform (SST)
-def sst_stft(signal, fs, window, nperseg=256, show=False, n_fft=None, hop_len=1, modulated=True, ssq_freqs=None,
-             padtype='reflect', squeezing='sum', gamma=None, preserve_transform=None, dtype=None, astensor=True,
-             flipud=False, get_w=False, get_dWx=False):
-    """
-    Description:
-        Synchrosqueezed Short-Time Fourier Transform.
-    Args:
-        signal: the input signal
-        fs: frequency of sampling
-        window: type of the window
-        nperseg: Length of each segment
-        show: whether to show the result
-        n_fft: length of fft
-        The other parameters are seldom used.
-    Returns:
-        Tx: Synchrosqueezed STFT of `x`, of same shape as `Sx`.
-        Sx: STFT of `x`
-        ssq_freqs: Frequencies associated with rows of `Tx`.
-        Sfs: Frequencies associated with rows of `Sx` (by default == `ssq_freqs`).
-    """
-    Tx, Sx, ssq_freqs, Sfs = sq.ssq_stft(signal, window=window, win_len=nperseg, fs=fs, n_fft=n_fft)
-    if show:
-        plt.subplot(2, 1, 1)
-        plt.title("STFT of Input signal")
-        plt.imshow(np.abs(Sx), aspect="auto")
-        plt.xlabel("Time")
-        plt.ylabel("Frequency")
-        plt.colorbar(label="Magnitude")
-        plt.subplot(2, 1, 2)
-        plt.title("Synchrosqueezed STFT of Input signal")
-        plt.xlabel("Time")
-        plt.ylabel("Frequency")
-        plt.imshow(np.abs(Tx), aspect="auto")
-        plt.colorbar(label="Magnitude")
-        plt.tight_layout()
-        plt.show()
-    return Tx, Sx, ssq_freqs, Sfs
-
-def sst_cwt(signal, wavelet, scales, nv, fs, gamma=None, show=False):
-    """
-    Description:
-        Synchrosqueezed Continuous Wavelet Transform
-    Args:
-        signal: input of signal
-        wavelet: the type of mother wavelet
-        scales: how to scale the output, log or linear
-        nv: number of voices
-        fs: sampling frequency
-        gamma: CWT phase threshold
-        show: whether to show the result
-    Returns:
-        Tx: Synchrosqueezed CWT of `x`. (rows=~frequencies, cols=timeshifts)
-            (nf = len(ssq_freqs); n = len(x))
-            `nf = na` by default, where `na = len(scales)`.
-        Wx: Continuous Wavelet Transform of `x`, L1-normed (see `cwt`).
-        ssq_freqs: Frequencies associated with rows of `Tx`.
-        scales: Scales associated with rows of `Wx`.
-    """
-    Tx, Wx, ssq_freqs, scales = sq.ssq_cwt(x=signal, wavelet=wavelet, scales=scales, nv=nv, fs=fs, gamma=gamma)
-    if show:
-        plt.subplot(2, 1, 1)
-        plt.imshow(np.abs(Wx), aspect='auto', extent=[0, len(signal) / fs, ssq_freqs[-1], ssq_freqs[0]])
-        plt.colorbar(label='Magnitude')
-        plt.title('Continuous Wavelet Transform')
-        plt.xlabel('Time/s')
-        plt.ylabel('Frequency')
-        plt.subplot(2, 1, 2)
-        plt.imshow(np.abs(Tx), aspect='auto', extent=[0, len(signal) / fs, ssq_freqs[-1], ssq_freqs[0]])
-        plt.colorbar(label='Magnitude')
-        plt.title('Synchrosqueezed Continuous Wavelet Transform')
-        plt.xlabel('Time/s')
-        plt.ylabel('Frequency')
-        plt.tight_layout()
-        plt.show()
-    return Tx, Wx, ssq_freqs, scales
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-def extract_spectral_entropy(signal, fs, num_segments=10):
-    """
-    Description:
-        Extract the spectral entropy of a signal.
-
-    Params:
-        signal (numpy.ndarray): Input signal.
-        fs (float): Sampling frequency of the signal.
-        num_segments (int, optional): Number of segments for entropy calculation.
-
-    Returns:
-        float: Spectral entropy value.
-    """
-
-    f, Pxx = welch(signal, fs=fs)
-    segment_size = len(f) // num_segments
-    segment_entropies = []
-
-    for i in range(num_segments):
-        start_idx = i * segment_size
-        end_idx = (i + 1) * segment_size
-        segment_Pxx = Pxx[start_idx:end_idx]
-        segment_entropies.append(entropy(segment_Pxx))
-
-    spectral_entropy = np.mean(segment_entropies)
-    return spectral_entropy
-
-
-
-
-def extract_mean_spectral_energy(signal, fs):
-    """
-    Description:
-        Extract the mean spectral energy of a signal.
-
-    Params:
-        signal (numpy.ndarray): Input signal.
-        fs (float): Sampling frequency of the signal.
-
-    Returns:
-        float: Mean spectral energy value.
-    """
-
-    f, Pxx = welch(signal, fs=fs)
-    mean_spectral_energy = np.mean(Pxx)
-    return mean_spectral_energy
-
-
-
-
-def DCT_synthesize(amps, fs, ts):
-    """
-    Description:
-        Synthesize a mixture of cosines with given amps and fs.
-
-    Input:
-        amps: amplitudes
-        fs: frequencies in Hz
-        ts: times to evaluate the signal
-
-    Returns:
-        wave array
-    """
-    args = np.outer(ts, fs)
-    M = np.cos(np.pi * 2 * args)
-    ys = np.dot(M, amps)
-    return ys
-
-
-def DCT_analyze(ys, fs, ts):
-    """
-    Description:
-        Analyze a mixture of cosines and return amplitudes.
-
-    Input:
-        ys: wave array
-        fs: frequencies in Hz
-        ts: time when the signal was evaluated
-
-    returns:
-        vector of amplitudes
-    """
-    args = np.outer(ts, fs)
-    M = np.cos(np.pi * 2 * args)
-    amps = np.dot(M, ys) / 2
-    return amps
-
-
-def DCT_iv(ys):
-    """
-    Description:
-        Computes DCT-IV.
-
-    Input:
-        wave array
-
-    returns:
-        vector of amplitudes
-    """
-    N = len(ys)
-    ts = (0.5 + np.arange(N)) / N
-    fs = (0.5 + np.arange(N)) / 2
-    args = np.outer(ts, fs)
-    M = np.cos(np.pi * 2 * args)
-    amps = np.dot(M, ys) / 2
-    return amps
-
-
-def inverse_DCT_iv(amps):
-    return DCT_iv(amps) * 2
-
-
-
-
-
-
-
-def cal_corrcoef(signal1, signal2):
-    """
-    Description:
-        To get the correlate coefficient
-
-    Input:
-        Two signal with same length
-
-    Return:
-        The correlate coefficient
-    """
-    return np.corrcoef(signal1, signal2)[0, 1]
-
-
-def cal_serial_corr(signal, lag):
-    """
-    Description:
-        To get the serial correlate coefficient
-
-    Input:
-        One signal and the lag which means how much it delays
-
-    Return:
-        The serial correlate coefficient
-    """
-    signal1 = signal[lag:]
-    signal2 = signal[:len(signal) - lag]
-    return np.corrcoef(signal1, signal2)[0, 1]
-
-
-def cal_autocorr(signal, plot=False):
-    """
-    Description:
-        To get the auto correlate coefficient
-
-    Input:
-        One signal
-
-    Return:
-        The serial correlate coefficient with different lag which is from 0 to len(wave)//2
-    """
-    lags = range(len(signal) // 2)
-    corrs = [cal_serial_corr(signal, lag) for lag in lags]
-    if plot:
-        plt.plot(lags, corrs)
-        plt.show()
-    return lags, corrs
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 # Below is the needed function for chirplet transform
 class FCT:
@@ -1121,59 +822,101 @@ def build_fft(input_signal, filter_coefficients, threshold_windows=6, boundary=0
                                      num_coeffs - 1:num_coeffs + windowed_fft.size - current_pos - 1].real
 
     return windowed_fft
-
-
 # chirplet transform function ends here
 
-
-
-
-
-
-
-
-
-
-
-
-# # 定义Chirplet函数
-# def chirplet(alpha, beta, gamma, t):
-#     return np.exp(1j * (alpha * t ** 2 + beta * t + gamma))
-#
-#
-# # 定义PCT计算函数
-# def polynomial_chirplet_transform(signal, alpha, beta, gamma):
-#     n = len(signal)
-#     t = np.arange(n)
-#     pct_result = np.zeros(n, dtype=complex)
-#
-#     for i in range(n):
-#         t_shifted = t - t[i]
-#         chirplet_function = chirplet(alpha, beta, gamma, t_shifted)
-#         pct_result[i] = np.sum(signal * chirplet_function)
-#
-#     return np.abs(pct_result)  # 提取振幅信息
-
-def cwt(data, sampling_rate, wavename, totalscal=256):
+## Wigner Ville Distribution (WVD)
+def my_wvd(signal, show=False):
     """
     Description:
-        Perform Continuous Wavelet Transform (CWT) on a given signal.
+        Analyze the time-frequency characteristics of a signal using the Wigner-Ville Transform (WVT) and visualize the results.
 
-    Parameters:
-        data (numpy.ndarray): Input signal.
-        sampling_rate (float): Sampling rate of the signal.
-        wavename (str): Name of the wavelet function to use.
-        totalscal (int, optional): Length of the scale sequence for wavelet transform (default is 256).
-
+    Params:
+        signal (numpy.ndarray): The input signal.
+        show: whether to plot the result
     Returns:
-        cwtmatr (numpy.ndarray): The CWT matrix representing the wavelet transform of the input signal.
-        frequencies (numpy.ndarray): The frequencies corresponding to the CWT matrix rows.
+        tfr_wvd (numpy.ndarray): The time-frequency representation (WVD) of the signal.
+        t_wvd (numpy.ndarray): Time values corresponding to the WVD.
+        f_wvd (numpy.ndarray): Normalized frequency values corresponding to the WVD.
     """
+    wvd = tftb.processing.WignerVilleDistribution(signal)
+    tfr_wvd, t_wvd, f_wvd = wvd.run()
+    if show:
+        wvd.plot(kind="contourf", scale="log")
+    return tfr_wvd, t_wvd, f_wvd
 
-    fc = pywt.central_frequency(wavename)
-    cparam = 2 * fc * totalscal
-    scales = cparam / np.arange(totalscal, 1, -1)
+## SynchroSqueezing Transform (SST)
+def sst_stft(signal, fs, window, nperseg=256, show=False, n_fft=None, hop_len=1, modulated=True, ssq_freqs=None,
+             padtype='reflect', squeezing='sum', gamma=None, preserve_transform=None, dtype=None, astensor=True,
+             flipud=False, get_w=False, get_dWx=False):
+    """
+    Description:
+        Synchrosqueezed Short-Time Fourier Transform.
+    Args:
+        signal: the input signal
+        fs: frequency of sampling
+        window: type of the window
+        nperseg: Length of each segment
+        show: whether to show the result
+        n_fft: length of fft
+        The other parameters are seldom used.
+    Returns:
+        Tx: Synchrosqueezed STFT of `x`, of same shape as `Sx`.
+        Sx: STFT of `x`
+        ssq_freqs: Frequencies associated with rows of `Tx`.
+        Sfs: Frequencies associated with rows of `Sx` (by default == `ssq_freqs`).
+    """
+    Tx, Sx, ssq_freqs, Sfs = sq.ssq_stft(signal, window=window, win_len=nperseg, fs=fs, n_fft=n_fft)
+    if show:
+        plt.subplot(2, 1, 1)
+        plt.title("STFT of Input signal")
+        plt.imshow(np.abs(Sx), aspect="auto")
+        plt.xlabel("Time")
+        plt.ylabel("Frequency")
+        plt.colorbar(label="Magnitude")
+        plt.subplot(2, 1, 2)
+        plt.title("Synchrosqueezed STFT of Input signal")
+        plt.xlabel("Time")
+        plt.ylabel("Frequency")
+        plt.imshow(np.abs(Tx), aspect="auto")
+        plt.colorbar(label="Magnitude")
+        plt.tight_layout()
+        plt.show()
+    return Tx, Sx, ssq_freqs, Sfs
 
-    cwtmatr, frequencies = pywt.cwt(data, scales, wavename, 1.0 / sampling_rate)
-
-    return cwtmatr, frequencies
+def sst_cwt(signal, wavelet, scales, nv, fs, gamma=None, show=False):
+    """
+    Description:
+        Synchrosqueezed Continuous Wavelet Transform
+    Args:
+        signal: input of signal
+        wavelet: the type of mother wavelet
+        scales: how to scale the output, log or linear
+        nv: number of voices
+        fs: sampling frequency
+        gamma: CWT phase threshold
+        show: whether to show the result
+    Returns:
+        Tx: Synchrosqueezed CWT of `x`. (rows=~frequencies, cols=timeshifts)
+            (nf = len(ssq_freqs); n = len(x))
+            `nf = na` by default, where `na = len(scales)`.
+        Wx: Continuous Wavelet Transform of `x`, L1-normed (see `cwt`).
+        ssq_freqs: Frequencies associated with rows of `Tx`.
+        scales: Scales associated with rows of `Wx`.
+    """
+    Tx, Wx, ssq_freqs, scales = sq.ssq_cwt(x=signal, wavelet=wavelet, scales=scales, nv=nv, fs=fs, gamma=gamma)
+    if show:
+        plt.subplot(2, 1, 1)
+        plt.imshow(np.abs(Wx), aspect='auto', extent=[0, len(signal) / fs, ssq_freqs[-1], ssq_freqs[0]])
+        plt.colorbar(label='Magnitude')
+        plt.title('Continuous Wavelet Transform')
+        plt.xlabel('Time/s')
+        plt.ylabel('Frequency')
+        plt.subplot(2, 1, 2)
+        plt.imshow(np.abs(Tx), aspect='auto', extent=[0, len(signal) / fs, ssq_freqs[-1], ssq_freqs[0]])
+        plt.colorbar(label='Magnitude')
+        plt.title('Synchrosqueezed Continuous Wavelet Transform')
+        plt.xlabel('Time/s')
+        plt.ylabel('Frequency')
+        plt.tight_layout()
+        plt.show()
+    return Tx, Wx, ssq_freqs, scales

@@ -18,6 +18,86 @@ with warnings.catch_warnings():
     from fastsst import SingularSpectrumTransformation
 
 
+def scg(duration=10, sampling_rate=100, heart_rate_min=50, heart_rate_max=150, s_min=90, s_max=140,
+        d_min=60, d_max=100, respiratory=True, respiratory_rate_min=10, respiratory_rate_max=30):
+    """
+    Description:
+        A function to generate a scg signal
+    Args:
+        duration: length of the signal (second)
+        sampling_rate: (Hz)
+        heart_rate_min: the min heart rate (beats/minute)
+        heart_rate_max: the max heart rate (beats/minute)
+        respiratory: whether to add the respiratory signal
+        respiratory_rate_min: the min respiratory rate (cycles/minute)
+        respiratory_rate_max: the max respiratory rate (cycles/minute)
+        s_min: the min systolic
+        s_max: the max systolic
+        d_min: the min diastolic
+        d_max: the max diastolic
+    Returns:
+        A scg signal
+    """
+    length = duration * sampling_rate
+    respiratory_rate = np.random.randint(respiratory_rate_min,respiratory_rate_max)
+    diastolic = np.random.randint(d_min,d_max)
+    systolic = np.random.randint(s_min,s_max)
+    heart_rate = np.random.randint(heart_rate_min,heart_rate_max)
+
+    # generate the basic waveform of scg
+    ind = np.random.randint(17,34)
+    cardiac_s = scipy.signal.daub(ind)
+    cardiac_d = scipy.signal.daub(ind) * 0.3 * diastolic / 80  # change height
+
+    # make sure the length is 100
+    cardiac_s = scipy.signal.resample(cardiac_s, 100)
+    cardiac_d = scipy.signal.resample(cardiac_d, 100)
+
+    # take the first 40 timestamps as cardiac_s
+    cardiac_s = cardiac_s[0:40]
+
+    # determine the length of gap depending on systolic (S)
+    distance = 180 - systolic
+    zero_signal = np.zeros(distance)
+
+    # concatenate the three parts as a period: cardiac_s + gap + cardiac_d
+    cardiac = np.concatenate([cardiac_s, zero_signal, cardiac_d])
+
+    cardiac_length = int(100 * sampling_rate / heart_rate)
+    cardiac = scipy.signal.resample(cardiac, cardiac_length)  # fix every cardiac length to 1000/heart_rate
+
+    # Caculate the number of beats in 10 seconds
+    num_heart_beats = int(duration * heart_rate / 60)  # if hr = 70, the num_heart_beats = 11
+
+    scg = np.tile(cardiac, num_heart_beats)
+    scg = signal_resample(
+        scg, sampling_rate=int(len(scg) / 10), desired_length=length, desired_sampling_rate=sampling_rate
+    )
+
+    if respiratory:
+        ### add rr
+        num_points = duration * sampling_rate
+        x_space = np.linspace(0, 1, num_points)
+        seg_fre = respiratory_rate / (60 / duration)
+        seg_amp = max(scg) * 0.00001
+        rr_component = seg_amp * np.sin(2 * np.pi * seg_fre * x_space)
+        scg *= (rr_component + 2 * seg_amp)
+
+    return scg
+
+def signal_resample(signal, desired_length=None, sampling_rate=None, desired_sampling_rate=None, method="interpolation"):
+    if desired_length is None:
+        desired_length = int(np.round(len(signal) * desired_sampling_rate / sampling_rate))
+    # Sanity checks
+    if len(signal) == desired_length:
+        return signal
+    # Resample
+    resampled = _resample_interpolation(signal, desired_length)
+    return resampled
+
+def _resample_interpolation(signal, desired_length):
+    resampled_signal = scipy.ndimage.zoom(signal, desired_length / len(signal))
+    return resampled_signal
 
 # Time Domain
 ## Template of SCG
@@ -294,8 +374,11 @@ def my_fft(signal, fs):
     l = len(signal)
     mag = fft(signal)
     freq = fftfreq(l, 1 / fs)
-    mag = mag / l * 2
-    return freq, mag
+    mag = mag / l
+    index = np.argsort(freq)
+    freq_sort = freq[index]
+    mag_sort = mag[index]
+    return freq_sort, mag_sort
 
 def my_ifft(mag):
     """
@@ -306,7 +389,8 @@ def my_ifft(mag):
     Returns:
         The recovered original signal. It is complex-valued.
     """
-    mag = mag / 2 * len(mag)
+    mag = np.append(mag[int((len(mag)+1)/2):],mag[0:int((len(mag)+1)/2)])
+    mag = mag * len(mag)
     x = ifft(mag)
     return x
 
@@ -920,3 +1004,151 @@ def sst_cwt(signal, wavelet, scales, nv, fs, gamma=None, show=False):
         plt.tight_layout()
         plt.show()
     return Tx, Wx, ssq_freqs, scales
+
+def extract_spectral_entropy(signal, fs, num_segments=10):
+    """
+    Description:
+        Extract the spectral entropy of a signal.
+
+    Params:
+        signal (numpy.ndarray): Input signal.
+        fs (float): Sampling frequency of the signal.
+        num_segments (int, optional): Number of segments for entropy calculation.
+
+    Returns:
+        float: Spectral entropy value.
+    """
+
+    f, Pxx = welch(signal, fs=fs)
+    segment_size = len(f) // num_segments
+    segment_entropies = []
+
+    for i in range(num_segments):
+        start_idx = i * segment_size
+        end_idx = (i + 1) * segment_size
+        segment_Pxx = Pxx[start_idx:end_idx]
+        segment_entropies.append(entropy(segment_Pxx))
+
+    spectral_entropy = np.mean(segment_entropies)
+    return spectral_entropy
+
+def extract_mean_spectral_energy(signal, fs):
+    """
+    Description:
+        Extract the mean spectral energy of a signal.
+
+    Params:
+        signal (numpy.ndarray): Input signal.
+        fs (float): Sampling frequency of the signal.
+
+    Returns:
+        float: Mean spectral energy value.
+    """
+
+    f, Pxx = welch(signal, fs=fs)
+    mean_spectral_energy = np.mean(Pxx)
+    return mean_spectral_energy
+
+def DCT_synthesize(amps, fs, ts):
+    """
+    Description:
+        Synthesize a mixture of cosines with given amps and fs.
+
+    Input:
+        amps: amplitudes
+        fs: frequencies in Hz
+        ts: times to evaluate the signal
+
+    Returns:
+        wave array
+    """
+    args = np.outer(ts, fs)
+    M = np.cos(np.pi * 2 * args)
+    ys = np.dot(M, amps)
+    return ys
+
+def DCT_analyze(ys, fs, ts):
+    """
+    Description:
+        Analyze a mixture of cosines and return amplitudes.
+
+    Input:
+        ys: wave array
+        fs: frequencies in Hz
+        ts: time when the signal was evaluated
+
+    returns:
+        vector of amplitudes
+    """
+    args = np.outer(ts, fs)
+    M = np.cos(np.pi * 2 * args)
+    amps = np.dot(M, ys) / 2
+    return amps
+
+def DCT_iv(ys):
+    """
+    Description:
+        Computes DCT-IV.
+
+    Input:
+        wave array
+
+    returns:
+        vector of amplitudes
+    """
+    N = len(ys)
+    ts = (0.5 + np.arange(N)) / N
+    fs = (0.5 + np.arange(N)) / 2
+    args = np.outer(ts, fs)
+    M = np.cos(np.pi * 2 * args)
+    amps = np.dot(M, ys) / 2
+    return amps
+
+def inverse_DCT_iv(amps):
+    return DCT_iv(amps) * 2
+
+def cal_corrcoef(signal1, signal2):
+    """
+    Description:
+        To get the correlate coefficient
+
+    Input:
+        Two signal with same length
+
+    Return:
+        The correlate coefficient
+    """
+    return np.corrcoef(signal1, signal2)[0, 1]
+
+def cal_serial_corr(signal, lag):
+    """
+    Description:
+        To get the serial correlate coefficient
+
+    Input:
+        One signal and the lag which means how much it delays
+
+    Return:
+        The serial correlate coefficient
+    """
+    signal1 = signal[lag:]
+    signal2 = signal[:len(signal) - lag]
+    return np.corrcoef(signal1, signal2)[0, 1]
+
+def cal_autocorr(signal, plot=False):
+    """
+    Description:
+        To get the auto correlate coefficient
+
+    Input:
+        One signal
+
+    Return:
+        The serial correlate coefficient with different lag which is from 0 to len(wave)//2
+    """
+    lags = range(len(signal) // 2)
+    corrs = [cal_serial_corr(signal, lag) for lag in lags]
+    if plot:
+        plt.plot(lags, corrs)
+        plt.show()
+    return lags, corrs

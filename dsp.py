@@ -153,7 +153,7 @@ def scg_simulate(**kwargs):
 
     simulated_data = np.asarray(simulated_data)
     if args['num_rows'] == 1:
-        return simulated_data
+        return simulated_data.flatten()
     else:
         np.save(args['data_file'], simulated_data)
         print(f"{args['data_file']} is generated and saved!")
@@ -291,8 +291,11 @@ def _scg_simulate_wavelet(**kwargs):
     
     if args['pulse_type'] == "db":
         ind = random.randint(17, 34) 
-        cardiac_s = scipy.signal.daub(ind)
-        cardiac_d = scipy.signal.daub(ind)* 0.3 * args['diastolic'] / 80 # change height to 0.3
+        db = pywt.Wavelet(f'db{ind}')
+        dec_lo, dec_hi, rec_lo, rec_hi = db.filter_bank
+        dec_lo = np.array(dec_lo)[::-1]
+        cardiac_s = dec_lo
+        cardiac_d = dec_lo * 0.3 * args['diastolic'] / 80 # change height to 0.3
         cardiac_s = scipy.signal.resample(cardiac_s, 100)
         cardiac_d = scipy.signal.resample(cardiac_d, 100)
         
@@ -336,7 +339,8 @@ def _scg_simulate_wavelet(**kwargs):
 
     # Resample
     scg = signal_resample(
-        scg, sampling_rate = int(len(scg) / 10),
+        scg, 
+        sampling_rate = int(len(scg) / 10),
         desired_length = args['sampling_rate'] * args['duration'],
         desired_sampling_rate = args['sampling_rate']
     )
@@ -414,12 +418,12 @@ def signal_distort(**kwargs):
         'sampling_rate' : 100,
         'noise_type' : ["basic"],
         'noise_shape' : "laplace",
-        'noise_amplitude' : 0,
+        'noise_amplitude' : 0.1,
         'noise_frequency' : [5,10,100],
         'powerline_amplitude' : 0,
         'powerline_frequency' : 50,
         'artifacts_amplitude' : 0,
-        'artifacts_frequency' : 0,
+        'artifacts_frequency' : 100,
         'artifacts_number' : 5,
         'artifacts_shape' : "laplace",
         'n_echo' : 3, 
@@ -458,7 +462,7 @@ def signal_distort(**kwargs):
             )
             
     if "resonance" in args['noise_type']:
-        noise += add_echo_noise(
+        noise += _signal_distort_resonance(
             signal = args['signal'], 
             n_echo = args['n_echo'],
             attenuation_factor = args['attenuation_factor'],
@@ -498,7 +502,7 @@ def signal_distort(**kwargs):
 
     return distorted
 
-def add_echo_noise(
+def _signal_distort_resonance(
     signal, n_echo=3, attenuation_factor=[0.1, 0.05, 0.02], delay_factor=[5] * 3
 ):
     """
@@ -550,8 +554,8 @@ def _signal_distort_artifacts(
     signal,
     signal_sd=None,
     sampling_rate=100,
-    artifacts_frequency=0,
-    artifacts_amplitude=0.1,
+    artifacts_frequency=100,
+    artifacts_amplitude=0,
     artifacts_number=5,
     artifacts_shape="laplace",
     silent=False,
@@ -591,7 +595,7 @@ def _signal_distort_artifacts(
 
 
 def _signal_distort_powerline(
-    signal, signal_sd=None, sampling_rate=100, powerline_frequency=[5,10,100], powerline_amplitude=0, silent=False
+    signal, signal_sd=None, sampling_rate=100, powerline_frequency=50, powerline_amplitude=0, silent=False
 ):
 
     duration = len(signal) / sampling_rate
@@ -611,7 +615,7 @@ def _signal_distort_noise_multifrequency(
     signal_sd=None,
     sampling_rate=100,
     noise_amplitude=0.1,
-    noise_frequency=100,
+    noise_frequency=[5, 10, 100],
     noise_shape="laplace",
     silent=False,
 ):
@@ -642,7 +646,7 @@ def _signal_distort_noise_multifrequency(
 
 
 def _signal_distort_noise(
-    n_samples, sampling_rate=1000, noise_frequency=100, noise_amplitude=0.1, noise_shape="laplace", silent=False
+    n_samples, sampling_rate=100, noise_frequency=[5, 10, 100], noise_amplitude=0.1, noise_shape="laplace", silent=False
 ):
 
     _noise = np.zeros(n_samples)
